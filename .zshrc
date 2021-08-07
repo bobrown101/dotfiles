@@ -99,10 +99,6 @@ source $ZSH/oh-my-zsh.sh
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 
 
-#############################################
-# This sets the dark and colored theme based upon if in dark or light mode
-#############################################
-#~/.dotfiles/./.set-light-dark-theme.sh
 
 alias brewup="brew update; brew upgrade; brew cleanup; brew doctor"
 alias ll="ls -al"
@@ -127,6 +123,5 @@ export PATH="/usr/local/sbin:$PATH"
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
-source /Users/brbrown/.config/broot/launcher/bash/br
 
 export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
