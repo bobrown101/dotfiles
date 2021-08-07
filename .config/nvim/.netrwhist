@@ -1,0 +1,12 @@
+let g:netrw_dirhistmax  =10
+let g:netrw_dirhistcnt =7
+let g:netrw_dirhist_7='/Users/brbrown/Developer/CRM'
+let g:netrw_dirhist_6='/Users/brbrown/Developer/CRM/crm-index-ui/static/js/board/editCardsPanel/components'
+let g:netrw_dirhist_5='/Users/brbrown/Developer/CRM/crm-index-ui/static/js/board/editCardsPanel'
+let g:netrw_dirhist_4='/Users/brbrown/Developer/CRM/crm-index-ui/static/js/board'
+let g:netrw_dirhist_3='/Users/brbrown/Developer/CRM/crm-index-ui/static/js'
+let g:netrw_dirhist_2='/Users/brbrown/Developer/CRM/crm-index-ui/static'
+let g:netrw_dirhist_1='/Users/brbrown/Developer/CRM/crm-index-ui'
+let g:netrw_dirhist_0='/Users/brbrown/Developer/CRM'
+let g:netrw_dirhist_9='/Users/brbrown/Developer/CRM/crm-index-ui/static/js/board/editCardsPanel/components'
+let g:netrw_dirhist_8='/Users/brbrown/Developer/CRM/crm-index-ui/static/js/board/editCardsPanel'

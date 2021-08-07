@@ -1,0 +1,70 @@
+vim.g.mapleader = ' '
+local execute = vim.api.nvim_command
+local fn = vim.fn
+
+local install_path = fn.stdpath('data')..'/site/pack/packer/start/packer.nvim'
+
+if fn.empty(fn.glob(install_path)) > 0 then
+  fn.system({'git', 'clone', 'https://github.com/wbthomason/packer.nvim', install_path})
+  execute 'packadd packer.nvim'
+end
+
+
+require('packer').startup( function()
+  use { 'wbthomason/packer.nvim'}
+--  use { 'rktjmp/lush.nvim' }
+  use 'folke/tokyonight.nvim'
+-- use {"npxbr/gruvbox.nvim", requires = {"rktjmp/lush.nvim"}}
+  -- use { 'sainnhe/gruvbox-material' }
+ -- use 'projekt0n/github-nvim-theme'
+  use { 'morhetz/gruvbox'}
+  use { 'nvim-treesitter/nvim-treesitter'}
+  use { 'neovim/nvim-lspconfig'}
+  use { 'hrsh7th/nvim-compe'}
+  --use { 'glepnir/lspsaga.nvim'}
+  use { 'glepnir/galaxyline.nvim'}
+  use { 'kyazdani42/nvim-web-devicons'}
+  -- use { 'tpope/vim-fugitive'}
+  -- use { 'f-person/git-blame.nvim' } 
+  use {
+    'lewis6991/gitsigns.nvim',
+    requires = {
+      'nvim-lua/plenary.nvim'
+    },
+  }
+  use { 'b3nj5m1n/kommentary'}
+  use { 'kyazdani42/nvim-tree.lua' }
+  use { 'mhinz/vim-startify'}
+  use { 'mhartington/formatter.nvim'}
+  use { 'JoosepAlviste/nvim-ts-context-commentstring'}
+  use { 'ray-x/lsp_signature.nvim'}
+  use { 'onsails/lspkind-nvim'}
+  use { 'nvim-lua/popup.nvim'}
+  use { 'nvim-lua/plenary.nvim'}
+  use { 'nvim-telescope/telescope.nvim'}
+  use { 'nvim-telescope/telescope-fzy-native.nvim'}
+  use { 'romgrk/barbar.nvim'}
+  use { 'folke/lsp-colors.nvim'}
+  use { 'folke/todo-comments.nvim'}
+  use {"akinsho/nvim-toggleterm.lua"}
+end)
+
+      require('gitsigns').setup({
+current_line_blame = false,
+
+      })
+require('git-blame')
+require('settings')
+require('theme')
+require('lsp')
+require('asset-bender')
+require("toggleterm-config")
+require("nvim-tree-config")
+require('compe-config')
+--require('lsp-saga-config')
+require('kommentary_config')
+require('bubbles-line')
+require('telescope-config')
+require('treesitter-config')
+require('todo-comments-config')
+require('formatter-config')
