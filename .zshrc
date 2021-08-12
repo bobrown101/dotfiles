@@ -125,3 +125,5 @@ export PATH="/usr/local/sbin:$PATH"
 
 
 export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
+
+source /Users/brbrown/Library/Application Support/org.dystroy.broot/launcher/bash/br

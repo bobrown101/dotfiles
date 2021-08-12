@@ -28,12 +28,18 @@ local function create_win()
   -- and prevent collisions with other plugins.
   vim.api.nvim_buf_set_option(buf, 'filetype', 'git-blame')
 
+  print(1)
   -- For better UX we will turn off line wrap and turn on current line highlight.
   vim.api.nvim_win_set_option(win, 'wrap', false)
   vim.api.nvim_win_set_option(win, 'cursorline', true)
   vim.api.nvim_win_set_width(win, 40)
   -- set_mappings() -- At end we will set mappings for our navigation.
-  vim.api.nvim_command('read!git blame --date human ' .. startingBuf  .. ' | cut -c 11- ' )
+
+  -- the grep is an ugly but super performant way to remove everything up until the first occurance of " ("
+  -- which strips off the commit hash and filename from the git blame log
+  
+  vim.api.nvim_command('read!git blame --date human ' .. startingBuf .. ' | grep -o " (.* [0-9]\\+)" | cut -c 3- ' )
+  -- vim.api.nvim_command('read!git blame --date human ' .. startingBuf  .. ' |  sed -n "s/ (/&\n/;s/.*\n//p"' )
   vim.cmd('normal gg')
   vim.cmd('normal dd') -- there is an empty line at the top of the file - remove it
 end
@@ -52,7 +58,9 @@ end
 
 function GBlame() 
   local starting_window = get_current_window()
+
   vim.api.nvim_win_set_option(starting_window, 'scrollbind', true)
+
   local starting_cursor_location = get_current_cursor_location(starting_window) 
 
   vim.cmd('normal gg')
@@ -60,8 +68,11 @@ function GBlame()
   create_win()
 
   local blame_window = get_current_window()
+
   set_cursor_position(blame_window, starting_cursor_location)
+
   vim.api.nvim_win_set_option(starting_window, 'scrollbind', true)
+
   vim.cmd('normal gg')
 
   set_cursor_position(starting_window, starting_cursor_location)
