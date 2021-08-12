@@ -28,7 +28,6 @@ local function create_win()
   -- and prevent collisions with other plugins.
   vim.api.nvim_buf_set_option(buf, 'filetype', 'git-blame')
 
-  print(1)
   -- For better UX we will turn off line wrap and turn on current line highlight.
   vim.api.nvim_win_set_option(win, 'wrap', false)
   vim.api.nvim_win_set_option(win, 'cursorline', true)
