@@ -11,6 +11,7 @@ end
 
 
 require('packer').startup( function()
+  use { 'bobrown101/git-blame.nvim' }
   use { 'wbthomason/packer.nvim'}
   use 'folke/tokyonight.nvim'
 -- use {"npxbr/gruvbox.nvim", requires = {"rktjmp/lush.nvim"}}
@@ -37,11 +38,6 @@ require('packer').startup( function()
   use {"akinsho/nvim-toggleterm.lua"}
 end)
 
-      require('gitsigns').setup({
-current_line_blame = false,
-
-      })
-require('git-blame')
 require('settings')
 require('theme')
 require('lsp')
@@ -49,7 +45,6 @@ require('asset-bender')
 require("toggleterm-config")
 require("nvim-tree-config")
 require('compe-config')
---require('lsp-saga-config')
 require('kommentary_config')
 require('bubbles-line')
 require('telescope-config')
