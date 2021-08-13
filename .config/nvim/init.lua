@@ -12,26 +12,14 @@ end
 
 require('packer').startup( function()
   use { 'wbthomason/packer.nvim'}
---  use { 'rktjmp/lush.nvim' }
   use 'folke/tokyonight.nvim'
 -- use {"npxbr/gruvbox.nvim", requires = {"rktjmp/lush.nvim"}}
-  -- use { 'sainnhe/gruvbox-material' }
- -- use 'projekt0n/github-nvim-theme'
   use { 'morhetz/gruvbox'}
   use { 'nvim-treesitter/nvim-treesitter'}
   use { 'neovim/nvim-lspconfig'}
   use { 'hrsh7th/nvim-compe'}
-  --use { 'glepnir/lspsaga.nvim'}
   use { 'glepnir/galaxyline.nvim'}
   use { 'kyazdani42/nvim-web-devicons'}
-  -- use { 'tpope/vim-fugitive'}
-  -- use { 'f-person/git-blame.nvim' } 
-  use {
-    'lewis6991/gitsigns.nvim',
-    requires = {
-      'nvim-lua/plenary.nvim'
-    },
-  }
   use { 'b3nj5m1n/kommentary'}
   use { 'kyazdani42/nvim-tree.lua' }
   use { 'mhinz/vim-startify'}
