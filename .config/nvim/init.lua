@@ -36,12 +36,14 @@ require('packer').startup( function()
   use { 'folke/lsp-colors.nvim'}
   use { 'folke/todo-comments.nvim'}
   use {"akinsho/nvim-toggleterm.lua"}
+  use { 'jose-elias-alvarez/null-ls.nvim' }
 end)
 
 require('settings')
 require('theme')
 require('lsp')
 require('asset-bender')
+require('null-ls-config')
 require("toggleterm-config")
 require("nvim-tree-config")
 require('compe-config')
@@ -51,3 +53,4 @@ require('telescope-config')
 require('treesitter-config')
 require('todo-comments-config')
 require('formatter-config')
+
