@@ -1,35 +1,75 @@
 local api = vim.api
+local a = require("plenary.async")
+local luv = vim.loop
+
+local Job = require("plenary.job")
+local log = require("plenary.log").new({
+    plugin = "asset-bender",
+    use_console = false,
+})
+
 local M = {}
+M.path_sep = vim.loop.os_uname().sysname == "Windows" and "\\" or "/"
+
 function M.LSPLogs()
-  local logFile = vim.lsp.get_log_path()
-  api.nvim_command("split|term tail -f " ..logFile)
-  --api.nvim_command('enew') -- equivalent to :enew
-  --vim.bo[0].buftype=nofile -- set the current buffer's (buffer 0) buftype to nofile
-  --vim.bo[0].bufhidden=hide
-  --vim.bo[0].swapfile=false
+    local logFile = vim.lsp.get_log_path()
+    api.nvim_command("split|term tail -f " .. logFile)
 end
 
-
 function M.GitRoot()
-  -- https://github.com/nvim-telescope/telescope-project.nvim/blob/master/lua/telescope/_extensions/project_actions.lua
-  local git_root = vim.fn.systemlist("git -C " .. vim.loop.cwd() .. " rev-parse --show-toplevel")[
-    1
-  ]
-  local project_directory = git_root
-  if not git_root then
-    project_directory = vim.loop.cwd()
-  end
-  return project_directory
+    -- https://github.com/nvim-telescope/telescope-project.nvim/blob/master/lua/telescope/_extensions/project_actions.lua
+    local git_root = vim.fn.systemlist("git -C " .. vim.loop.cwd() .. " rev-parse --show-toplevel")[1]
+    local project_directory = git_root
+    if not git_root then
+        project_directory = vim.loop.cwd()
+    end
+    return project_directory
 end
 
 function M.telescope_files()
-  local root = M.GitRoot()
-  require('telescope.builtin').find_files({cwd=root})
+    local root = M.GitRoot()
+    require("telescope.builtin").find_files({ cwd = root })
 end
 
 function M.telescope_grep()
-  local root = M.GitRoot()
-  require('telescope.builtin').live_grep({cwd=root})
+    local root = M.GitRoot()
+    require("telescope.builtin").live_grep({ cwd = root })
+end
+
+-- Asumes filepath is a file.
+local function dirname(filepath)
+    local is_changed = false
+    local result = filepath:gsub(M.path_sep .. "([^" .. M.path_sep .. "]+)$", function()
+        is_changed = true
+        return ""
+    end)
+    return result, is_changed
+end
+
+-- Ascend the buffer's path until we find the rootdir.
+-- is_root_path is a function which returns bool
+function M.buffer_find_root_dir(bufnr, is_root_path)
+    local bufname = vim.api.nvim_buf_get_name(bufnr)
+    if vim.fn.filereadable(bufname) == 0 then
+        return nil
+    end
+    local dir = bufname
+    -- Just in case our algo is buggy, don't infinite loop.
+    for _ = 1, 100 do
+        local did_change
+        dir, did_change = dirname(dir)
+        if is_root_path(dir, bufname) then
+            return dir, bufname
+        end
+        -- If we can't ascend further, then stop looking.
+        if not did_change then
+            return nil
+        end
+    end
+end
+
+function M.path_join(...)
+  return table.concat(vim.tbl_flatten {...}, M.path_sep)
 end
 
 return M

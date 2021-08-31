@@ -3,6 +3,9 @@ local log = require('plenary.log').new({
   plugin = 'asset-bender',
   use_console = false,
 })
+local path_join = require('tools').path_join;
+local buffer_find_root_dir = require('tools').buffer_find_root_dir;
+local filetypes = require('filetypes').defaultConfig;
 
 -- Some path manipulation utilities
 local function is_dir(filename)
@@ -21,44 +24,10 @@ local function dirname(filepath)
   return result, is_changed
 end
 
-local function path_join(...)
-  return table.concat(vim.tbl_flatten {...}, path_sep)
-end
-
--- Ascend the buffer's path until we find the rootdir.
--- is_root_path is a function which returns bool
-local function buffer_find_root_dir(bufnr, is_root_path)
-  local bufname = vim.api.nvim_buf_get_name(bufnr)
-  if vim.fn.filereadable(bufname) == 0 then
-    return nil
-  end
-  local dir = bufname
-  -- Just in case our algo is buggy, don't infinite loop.
-  for _ = 1, 100 do
-    local did_change
-    dir, did_change = dirname(dir)
-    if is_root_path(dir, bufname) then
-      return dir, bufname
-    end
-    -- If we can't ascend further, then stop looking.
-    if not did_change then
-      return nil
-    end
-  end
-end
 
 -- A table to store our root_dir to client_id lookup. We want one LSP per
 -- root directory, and this is how we assert that.
 local javascript_lsps = {}
--- Which filetypes we want to consider.
-local javascript_filetypes = {
-  ["javascript.jsx"] = true;
-  ["javascript"]     = true;
-  ["typescript"]     = true;
-  ["typescript.jsx"] = true;
-  ["javascriptreact"] = true;
-  ["typescriptreact"] = true;
-}
 
 local function getLogPath()
   return vim.lsp.get_log_path()
@@ -93,7 +62,7 @@ function check_start_javascript_lsp()
   local bufnr = vim.api.nvim_get_current_buf()
 
   -- Filter which files we are considering.
-  if not javascript_filetypes[vim.api.nvim_buf_get_option(bufnr, 'filetype')] then
+  if not filetypes[vim.api.nvim_buf_get_option(bufnr, 'filetype')] then
     return
   end
 
