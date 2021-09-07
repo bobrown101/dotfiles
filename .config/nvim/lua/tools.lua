@@ -69,7 +69,21 @@ function M.buffer_find_root_dir(bufnr, is_root_path)
 end
 
 function M.path_join(...)
-  return table.concat(vim.tbl_flatten {...}, M.path_sep)
+    return table.concat(vim.tbl_flatten({ ... }), M.path_sep)
+end
+
+function M.file_exists(fname)
+    local stat = vim.loop.fs_stat(fname)
+    return (stat and stat.type) or false
+end
+
+function M.is_dir(filename)
+    local stat = vim.loop.fs_stat(filename)
+    return stat and stat.type == "directory" or false
+end
+
+function M.open_file(file)
+    vim.cmd("e " .. file)
 end
 
 return M

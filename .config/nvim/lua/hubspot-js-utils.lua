@@ -3,10 +3,14 @@ local a = require("plenary.async")
 local luv = vim.loop
 local filetypes = require('filetypes').defaultConfig
 local buffer_find_root_dir = require('tools').buffer_find_root_dir
+local is_dir = require('tools').is_dir
+local file_exists = require('tools').file_exists
+local path_join = require('tools').path_join
+local open_file = require('tools').open_file
 local Job = require'plenary.job'
 local log = require('plenary.log').new({
   plugin = 'hubspot-js-utils',
-  use_console = false,
+  use_console = true,
 })
 
 
@@ -72,47 +76,27 @@ function M.test_file()
 
     -- Filter which files we are considering.
     if not filetypes[buf_filetype] then
-        log.info('current filetype is not relevant', buf_filetype)
+        log.error('current filetype is not relevant "', buf_filetype, '"')
         return
     end
 
-    local function file_exists(fname)
-        local stat = vim.loop.fs_stat(fname)
-        return (stat and stat.type) or false
-    end
-
-    local function is_dir(filename)
-        local stat = vim.loop.fs_stat(filename)
-        return stat and stat.type == "directory" or false
-    end
-
-    local function path_join(...)
-        return table.concat(vim.tbl_flatten({ ... }), path_sep)
-    end
-
-    local function open_file(file)
-      vim.cmd("e "..file)
-    end
-
-
     local static_root_dir = buffer_find_root_dir(bufnr, function(dir)
-        log.info(dir)
-        log.info("is js a dir", path_join(dir, "js"), is_dir(path_join(dir, "js")))
-        log.info("is test a dir", path_join(dir, "js"), is_dir(path_join(dir, "test")))
+        -- log.file_debug(dir)
+        -- log.file_debug("is js a dir", path_join(dir, "js"), is_dir(path_join(dir, "js")))
+        -- log.file_debug("is test a dir", path_join(dir, "js"), is_dir(path_join(dir, "test")))
 
         return is_dir(path_join(dir, "js")) and is_dir(path_join(dir, "test"))
     end)
 
     -- We couldn't find a root directory, so ignore this file.
     if not static_root_dir then
-        api.nvim_err_writeln("No test directory found, ending")
-        log.info("we couldnt find a test directory, ending")
+        log.error("No test directory found, ending")
         return
     end
 
-    log.info("found static root dir of", static_root_dir)
+    -- log.file_debug("found static root dir of", static_root_dir)
     local buff_file_path = vim.api.nvim_buf_get_name(bufnr)
-    log.info("from current file path of ", buff_file_path)
+    -- log.file_debug("from current file path of ", buff_file_path)
 
     -- strip off everything before /static/js/ (including that substring)
     -- and replace the ending of .js with -test.js
@@ -125,12 +109,12 @@ function M.test_file()
     local suggested_location = path_join(static_root_dir, "test", "spec", test_file_path)
 
     if file_exists(suggested_location) then
-      api.nvim_err_writeln('Test file found, opening')
+      -- log.file_debug('Test file found, opening')
       open_file(suggested_location)
       return
     end
 
-    log.info("test file path will be", suggested_location)
+    -- log.file_debug("test file path will be", suggested_location)
 
     local new_file_location = vim.fn.input({
         prompt = "New test file: ",
@@ -139,10 +123,10 @@ function M.test_file()
     })
 
     if new_file_location ~= "" then
-        log.info("below will be split file location")
+        -- log.file_debug("below will be split file location")
         open_file(new_file_location)
     else
-        api.nvim_err_writeln("New test file location is invalid - not creating")
+        log.error("New test file location is invalid - not creating '", new_file_location, '"')
     end
 end
 
