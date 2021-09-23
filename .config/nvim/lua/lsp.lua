@@ -31,7 +31,6 @@ local function organize_imports()
 end
 
 local on_attach = function(client, bufnr)
-    require("lsp_signature").on_attach(client, bufnr)
     local function buf_set_keymap(...)
         vim.api.nvim_buf_set_keymap(bufnr, ...)
     end
@@ -68,6 +67,7 @@ capabilities.textDocument.completion.completionItem.resolveSupport = {
         "additionalTextEdits",
     },
 }
+-- capabilities = require('cmp_nvim_lsp').update_capabilities(capabilities)
 
 require("lspconfig").tsserver.setup({
     cmd = {

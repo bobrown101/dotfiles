@@ -14,11 +14,16 @@ require('packer').startup( function()
   use { 'bobrown101/git-blame.nvim' }
   use { 'wbthomason/packer.nvim'}
   use 'folke/tokyonight.nvim'
--- use {"npxbr/gruvbox.nvim", requires = {"rktjmp/lush.nvim"}}
   use { 'morhetz/gruvbox'}
   use { 'nvim-treesitter/nvim-treesitter'}
   use { 'neovim/nvim-lspconfig'}
-  use { 'hrsh7th/nvim-compe'}
+
+  -- use { 'hrsh7th/nvim-compe'}
+  
+  use { 'hrsh7th/nvim-cmp' }
+  use { 'hrsh7th/cmp-nvim-lsp' }
+  use { 'hrsh7th/cmp-buffer' }
+
   use { 'glepnir/galaxyline.nvim'}
   use { 'kyazdani42/nvim-web-devicons'}
   use { 'b3nj5m1n/kommentary'}
@@ -47,7 +52,10 @@ require('hubspot-js-utils')
 require('null-ls-config')
 require("toggleterm-config")
 require("nvim-tree-config")
-require('compe-config')
+
+-- require('compe-config')
+require('cmp-config')
+
 require('kommentary_config')
 require('bubbles-line')
 require('telescope-config')
