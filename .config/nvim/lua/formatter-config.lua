@@ -92,12 +92,35 @@ require('formatter').setup({
           }
         end
     },
+
+    typescriptreact = {
+        -- prettier
+       function()
+          return {
+            exe = "prettier",
+            args = {"--stdin-filepath", vim.api.nvim_buf_get_name(0), '--config ~/prettier.config.js'},
+            stdin = true
+          }
+        end
+    },
+
+    mdx = {
+        -- prettier
+       function()
+          return {
+            exe = "prettier",
+            args = {"--stdin-filepath", vim.api.nvim_buf_get_name(0), '--config ~/prettier.config.js'},
+            stdin = true
+          }
+        end
+    },
   }
 })
 
 vim.api.nvim_exec([[
+au! BufRead,BufNewFile *.mdx setfiletype mdx
 augroup FormatAutogroup
   autocmd!
-  autocmd BufWritePost *.js,*.ts,*.lua FormatWrite
+  autocmd BufWritePost *.js,*.ts,*.tsx,*.lua,*.mdx FormatWrite
 augroup END
 ]], true)

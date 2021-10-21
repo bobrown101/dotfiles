@@ -37,7 +37,6 @@ require('packer').startup( function()
   use { 'nvim-lua/plenary.nvim'}
   use { 'nvim-telescope/telescope.nvim'}
   use { 'nvim-telescope/telescope-fzy-native.nvim'}
-  use { 'romgrk/barbar.nvim'}
   use { 'folke/lsp-colors.nvim'}
   use { 'folke/todo-comments.nvim'}
   use {"akinsho/nvim-toggleterm.lua"}

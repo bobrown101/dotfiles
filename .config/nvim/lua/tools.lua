@@ -36,6 +36,17 @@ function M.telescope_grep()
     require("telescope.builtin").live_grep({ cwd = root })
 end
 
+function M.telescope_buffers()
+    local root = M.GitRoot()
+    --[[ require('telescope.builtin').buffers(require('telescope.themes').get_dropdown({
+      mode = "normal" 
+    })) ]]
+
+    require('telescope.builtin').buffers({
+      initial_mode = "normal"
+    })
+end
+
 -- Asumes filepath is a file.
 local function dirname(filepath)
     local is_changed = false
