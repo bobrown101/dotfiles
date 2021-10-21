@@ -69,9 +69,17 @@ end
 time([[try_loadstring definition]], false)
 time([[Defining packer_plugins]], true)
 _G.packer_plugins = {
-  ["barbar.nvim"] = {
+  ["cmp-buffer"] = {
     loaded = true,
-    path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/barbar.nvim"
+    path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/cmp-buffer"
+  },
+  ["cmp-nvim-lsp"] = {
+    loaded = true,
+    path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/cmp-nvim-lsp"
+  },
+  ["cmp-nvim-lua"] = {
+    loaded = true,
+    path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/cmp-nvim-lua"
   },
   ["formatter.nvim"] = {
     loaded = true,
@@ -106,13 +114,12 @@ _G.packer_plugins = {
     path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/lspkind-nvim"
   },
   ["null-ls.nvim"] = {
-    config = { "\27LJ\2\n¦\1\0\0\6\0\n\0\0206\0\0\0'\2\1\0B\0\2\0029\1\2\0005\3\6\0004\4\3\0009\5\3\0009\5\4\0059\5\5\5>\5\1\4=\4\a\3B\1\2\0016\1\0\0'\3\b\0B\1\2\0029\1\1\0019\1\t\0014\3\0\0B\1\2\1K\0\1\0\nsetup\14lspconfig\fsources\1\0\0\reslint_d\15formatting\rbuiltins\vconfig\fnull-ls\frequire\0" },
     loaded = true,
     path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/null-ls.nvim"
   },
-  ["nvim-compe"] = {
+  ["nvim-cmp"] = {
     loaded = true,
-    path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/nvim-compe"
+    path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/nvim-cmp"
   },
   ["nvim-lspconfig"] = {
     loaded = true,
@@ -173,10 +180,6 @@ _G.packer_plugins = {
 }
 
 time([[Defining packer_plugins]], false)
--- Config for: null-ls.nvim
-time([[Config for null-ls.nvim]], true)
-try_loadstring("\27LJ\2\n¦\1\0\0\6\0\n\0\0206\0\0\0'\2\1\0B\0\2\0029\1\2\0005\3\6\0004\4\3\0009\5\3\0009\5\4\0059\5\5\5>\5\1\4=\4\a\3B\1\2\0016\1\0\0'\3\b\0B\1\2\0029\1\1\0019\1\t\0014\3\0\0B\1\2\1K\0\1\0\nsetup\14lspconfig\fsources\1\0\0\reslint_d\15formatting\rbuiltins\vconfig\fnull-ls\frequire\0", "config", "null-ls.nvim")
-time([[Config for null-ls.nvim]], false)
 if should_profile then save_profiles() end
 
 end)

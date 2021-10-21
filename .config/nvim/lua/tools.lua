@@ -38,10 +38,6 @@ end
 
 function M.telescope_buffers()
     local root = M.GitRoot()
-    --[[ require('telescope.builtin').buffers(require('telescope.themes').get_dropdown({
-      mode = "normal" 
-    })) ]]
-
     require('telescope.builtin').buffers({
       initial_mode = "normal"
     })
