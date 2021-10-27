@@ -13,7 +13,7 @@ if fn.empty(fn.glob(install_path)) > 0 then
 end
 
 require('packer').startup(function()
-    use {'~/Developer/git-blame.nvim'}
+    use {'~/Developer/git_blame.nvim'}
     -- use { 'bobrown101/git-blame.nvim' }
     use {'wbthomason/packer.nvim'}
     use 'folke/tokyonight.nvim'
@@ -63,4 +63,4 @@ require('telescope-config')
 require('treesitter-config')
 require('todo-comments-config')
 require('formatter-config')
-
+require('lyaml-completion')

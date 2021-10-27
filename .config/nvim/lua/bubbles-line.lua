@@ -1,5 +1,3 @@
-
-
 local gl = require("galaxyline")
 local gls = gl.section
 
@@ -10,54 +8,54 @@ local colors = {
     bg_alt = "#0B0C15",
     lightbg = "#21252B",
     commented = "#5c6370",
-	grey = "#3c4048",
-	line_bg = "#282c34",
-	creamydark = "#282c34",
+    grey = "#3c4048",
+    line_bg = "#282c34",
+    creamydark = "#282c34",
     purple = "#252930",
     cyan = "#00FFFF",
     nord = "#81A1C1",
-	lightblue = "#81a1c1",
+    lightblue = "#81a1c1",
     darkblue = "#61afef",
     blue = "#61afef",
-	limegreen = "#bbe67e",
+    limegreen = "#bbe67e",
     green = "#7ed491",
     fg_green = "#65a380",
-	creamygreen = "#a3be8c",
+    creamygreen = "#a3be8c",
     yellow = "#A3BE8C",
-	creamyorange = "#ff8800",
+    creamyorange = "#ff8800",
     orange = "#FF8800",
     bg = "#000B0C15",
     fg = "#D8DEE9",
     magenta = "#c678dd",
     red = "#df8890",
-	crimsonRed = "#990000",
+    crimsonRed = "#990000",
     greenYel = "#EBCB8B",
     white = "#d8dee9",
-	brown = "91684a"
+    brown = "91684a"
 }
 
 local mode_map = {
-    n		= {" NORMAL ", colors.red},
-    i		= {" INSERT ", colors.green},
-    c		= {" COMMAND ", colors.orange},
-    v		= {" VISUAL ", colors.lightblue},
-    R		= {" REPLACE ", colors.lightblue},
-	t		= {"  TERMINAL ", colors.magenta},
+    n = {" NORMAL ", colors.red},
+    i = {" INSERT ", colors.green},
+    c = {" COMMAND ", colors.orange},
+    v = {" VISUAL ", colors.lightblue},
+    R = {" REPLACE ", colors.lightblue},
+    t = {"  TERMINAL ", colors.magenta},
 
-	no		= {" NORMAL ", colors.red},
-	ic		= {" INSERT ", colors.green},
-	cv		= {" COMMAND ", colors.orange},
-	ce		= {" COMMAND ", colors.orange},
-    V		= {" VISUAL ", colors.lightblue},
-    [""]  = {" VISUAL ", colors.brown},
-	['r?']  = {" REPLACE ", colors.lightblue},
-	Rv		= {" REPLACE ", colors.lightblue},
-	r		= {" REPLACE ", colors.lightblue},
-	rm		= {" REPLACE ", colors.lightblue},
-	s		= {"  S ", colors.greenYelenYel},
-	S		= {"  S ", colors.greenYelenYel},
-	['']  = {"  S ", colors.greenYelenYel},
-	['!']	= {" ! ", colors.crimsonRed},
+    no = {" NORMAL ", colors.red},
+    ic = {" INSERT ", colors.green},
+    cv = {" COMMAND ", colors.orange},
+    ce = {" COMMAND ", colors.orange},
+    V = {" VISUAL ", colors.lightblue},
+    [""] = {" VISUAL ", colors.brown},
+    ['r?'] = {" REPLACE ", colors.lightblue},
+    Rv = {" REPLACE ", colors.lightblue},
+    r = {" REPLACE ", colors.lightblue},
+    rm = {" REPLACE ", colors.lightblue},
+    s = {"  S ", colors.greenYelenYel},
+    S = {"  S ", colors.greenYelenYel},
+    [''] = {"  S ", colors.greenYelenYel},
+    ['!'] = {" ! ", colors.crimsonRed}
 }
 
 ----------------------------=== Funcs ===--------------------------
@@ -77,17 +75,13 @@ local function highlight2(group, bg, fg, gui)
     vim.cmd(cmd)
 end
 
-
 ----------------------------=== Components ===--------------------------
 
 ----------------------------=== Left ===--------------------------
 
-
 gls.left[1] = {
     leftRounded = {
-        provider = function()
-            return ""
-        end,
+        provider = function() return "" end,
         highlight = 'GalaxyViModeInv'
     }
 }
@@ -98,7 +92,7 @@ gls.left[2] = {
             highlight2('GalaxyViMode', mode_hl(), colors.bg_alt, 'bold')
             highlight1('GalaxyViModeInv', mode_hl(), 'bold')
             return string.format(' %s', mode_label())
-        end,
+        end
     }
 }
 
@@ -112,14 +106,13 @@ gls.left[3] = {
     }
 }
 
-
 gls.left[4] = {
-	FileIcon = {
-       provider = "FileIcon",
-       separator = "",
-       separator_highlight = {colors.white, colors.white},
-       highlight = {colors.creamydark, colors.white}
-   }
+    FileIcon = {
+        provider = "FileIcon",
+        separator = "",
+        separator_highlight = {colors.white, colors.white},
+        highlight = {colors.creamydark, colors.white}
+    }
 
 }
 
@@ -133,9 +126,7 @@ gls.left[5] = {
 
 gls.left[6] = {
     teech = {
-        provider = function()
-            return ""
-        end,
+        provider = function() return "" end,
         separator = "",
         highlight = {colors.white, colors.bg}
     }
@@ -143,9 +134,7 @@ gls.left[6] = {
 
 local checkwidth = function()
     local squeeze_width = vim.fn.winwidth(0) / 2
-    if squeeze_width > 40 then
-        return true
-    end
+    if squeeze_width > 40 then return true end
     return false
 end
 
@@ -178,9 +167,7 @@ gls.left[9] = {
 
 gls.left[10] = {
     LeftEnd = {
-        provider = function()
-            return " "
-        end,
+        provider = function() return " " end,
         separator = " ",
         separator_highlight = {colors.bg, colors.bg},
         highlight = {colors.bg, colors.bg}
@@ -197,9 +184,7 @@ gls.left[11] = {
 
 gls.left[12] = {
     Space = {
-        provider = function()
-            return " "
-        end,
+        provider = function() return " " end,
         highlight = {colors.bg, colors.bg}
     }
 }
@@ -214,13 +199,10 @@ gls.left[13] = {
 
 gls.left[14] = {
     Space = {
-        provider = function()
-            return " "
-        end,
+        provider = function() return " " end,
         highlight = {colors.bg, colors.bg}
     }
 }
-
 
 gls.left[15] = {
     DiagnosticInfo = {
@@ -232,13 +214,10 @@ gls.left[15] = {
 
 gls.left[16] = {
     Space = {
-        provider = function()
-            return " "
-        end,
+        provider = function() return " " end,
         highlight = {colors.bg, colors.bg}
     }
 }
-
 
 gls.left[17] = {
     DiagnosticHint = {
@@ -247,7 +226,6 @@ gls.left[17] = {
         highlight = {colors.blue, colors.bg}
     }
 }
-
 
 ----------------------------=== Middle ===--------------------------
 -- gls.mid[1] = {
@@ -270,9 +248,7 @@ gls.left[17] = {
 
 gls.right[1] = {
     GitIcon = {
-        provider = function()
-            return "   "
-        end,
+        provider = function() return "   " end,
         condition = require("galaxyline.provider_vcs").check_git_workspace,
         highlight = {colors.limegreen, colors.bg}
     }
@@ -282,16 +258,14 @@ gls.right[2] = {
     GitBranch = {
         provider = "GitBranch",
         condition = require("galaxyline.provider_vcs").check_git_workspace,
-        highlight = {colors.darkblue, colors.bg},
+        highlight = {colors.darkblue, colors.bg}
     }
 }
 
 gls.right[3] = {
     right_LeftRounded = {
-		separator = " ", -- separate from git branch
-        provider = function()
-            return ""
-        end,
+        separator = " ", -- separate from git branch
+        provider = function() return "" end,
         highlight = {colors.grey, colors.bg}
     }
 }
@@ -316,9 +290,7 @@ gls.right[5] = {
 
 gls.right[6] = {
     rightRounded = {
-        provider = function()
-            return ""
-        end,
+        provider = function() return "" end,
         highlight = {colors.grey, colors.bg}
     }
 }

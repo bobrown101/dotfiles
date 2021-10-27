@@ -1,34 +1,30 @@
 local util = require("lspconfig/util")
 local Job = require("plenary.job")
 
-function getLogPath()
-    return vim.lsp.get_log_path()
-end
+function getLogPath() return vim.lsp.get_log_path() end
 
 function getTsserverPath()
     local result = "/lib/tsserver.js"
-    Job
-        :new({
-            command = "bpx",
-            args = { "--path", "hs-typescript" },
-            on_exit = function(j, return_val)
-                local path = j:result()[1]
-                result = path .. result
-            end,
-        })
-        :sync()
+    Job:new({
+        command = "bpx",
+        args = {"--path", "hs-typescript"},
+        on_exit = function(j, return_val)
+            local path = j:result()[1]
+            result = path .. result
+        end
+    }):sync()
 
     return result
 end
 
-local function organize_imports()
+--[[ local function organize_imports()
     local params = {
         command = "_typescript.organizeImports",
-        arguments = { vim.api.nvim_buf_get_name(0) },
-        title = "",
+        arguments = {vim.api.nvim_buf_get_name(0)},
+        title = ""
     }
     vim.lsp.buf.execute_command(params)
-end
+end ]]
 
 local on_attach = function(client, bufnr)
     local function buf_set_keymap(...)
@@ -38,18 +34,22 @@ local on_attach = function(client, bufnr)
         vim.api.nvim_buf_set_option(bufnr, ...)
     end
 
-    buf_set_keymap("n", "<space>gd", "<cmd>lua vim.lsp.buf.definition()<CR>", { noremap = true, silent = true })
-    buf_set_keymap("n", "<space>gi", "<cmd>lua vim.lsp.buf.implementation()<CR>", { noremap = true, silent = true })
-    buf_set_keymap("n", "<space>gr", "<cmd>lua vim.lsp.buf.references()<CR>", { noremap = true, silent = true })
-    buf_set_keymap("n", "<space>rn", "<cmd>lua vim.lsp.buf.rename()<CR>", { noremap = true, silent = true })
-    buf_set_keymap("n", "K", "<cmd>lua vim.lsp.buf.hover()<CR>", { noremap = true, silent = true })
-    buf_set_keymap("n", "<space>gca", "<cmd>lua vim.lsp.buf.code_action()<CR>", { noremap = true, silent = true })
-    buf_set_keymap(
-        "n",
-        "<space>gsd",
-        "<cmd>lua vim.lsp.buf.show_line_diagnostics({ focusable = false })<CR>",
-        { noremap = true, silent = true }
-    )
+    buf_set_keymap("n", "<space>gd", "<cmd>lua vim.lsp.buf.definition()<CR>",
+                   {noremap = true, silent = true})
+    buf_set_keymap("n", "<space>gi",
+                   "<cmd>lua vim.lsp.buf.implementation()<CR>",
+                   {noremap = true, silent = true})
+    buf_set_keymap("n", "<space>gr", "<cmd>lua vim.lsp.buf.references()<CR>",
+                   {noremap = true, silent = true})
+    buf_set_keymap("n", "<space>rn", "<cmd>lua vim.lsp.buf.rename()<CR>",
+                   {noremap = true, silent = true})
+    buf_set_keymap("n", "K", "<cmd>lua vim.lsp.buf.hover()<CR>",
+                   {noremap = true, silent = true})
+    buf_set_keymap("n", "<space>ga", "<cmd>lua vim.lsp.buf.code_action()<CR>",
+                   {noremap = true, silent = true})
+    buf_set_keymap("n", "<space>gsd",
+                   "<cmd>lua vim.lsp.buf.show_line_diagnostics({ focusable = false })<CR>",
+                   {noremap = true, silent = true})
 end
 
 local capabilities = vim.lsp.protocol.make_client_capabilities()
@@ -58,41 +58,43 @@ capabilities.textDocument.completion.completionItem.preselectSupport = true
 capabilities.textDocument.completion.completionItem.insertReplaceSupport = true
 capabilities.textDocument.completion.completionItem.labelDetailsSupport = true
 capabilities.textDocument.completion.completionItem.deprecatedSupport = true
-capabilities.textDocument.completion.completionItem.commitCharactersSupport = true
-capabilities.textDocument.completion.completionItem.tagSupport = { valueSet = { 1 } }
+capabilities.textDocument.completion.completionItem.commitCharactersSupport =
+    true
+capabilities.textDocument.completion.completionItem.tagSupport = {
+    valueSet = {1}
+}
 capabilities.textDocument.completion.completionItem.resolveSupport = {
-    properties = {
-        "documentation",
-        "detail",
-        "additionalTextEdits",
-    },
+    properties = {"documentation", "detail", "additionalTextEdits"}
 }
 -- capabilities = require('cmp_nvim_lsp').update_capabilities(capabilities)
 
 require("lspconfig").tsserver.setup({
     cmd = {
-        "typescript-language-server",
-        "--log-level", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
-        "1",
-        "--tsserver-log-verbosity",
-        "off", --Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
-        "--tsserver-log-file",
-        getLogPath(),
-        "--tsserver-path",
-        getTsserverPath(),
-        "--stdio",
+        "typescript-language-server", "--log-level", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
+        "1", "--tsserver-log-verbosity", "off", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
+        "--tsserver-log-file", getLogPath(), "--tsserver-path",
+        getTsserverPath(), "--stdio"
     },
     on_attach = on_attach,
-    -- root_dir = util.root_pattern("package.json"),
     root_dir = util.root_pattern(".git"),
-    filetypes = { "javascript", "javascriptreact", "javascript.jsx", "typescript", "typescriptreact", "typescript.tsx" },
-    commands = {
-        OrganizeImports = {
-            organize_imports,
-            description = "Organize Imports",
-        },
+    filetypes = {
+        "javascript", "javascriptreact", "javascript.jsx", "typescript",
+        "typescriptreact", "typescript.tsx"
     },
-    capabilities = capabilities,
+    --[[ commands = {
+        OrganizeImports = {organize_imports, description = "Organize Imports"}
+    }, ]]
+    capabilities = capabilities
 })
 
+-- npm install -g graphql-language-service-cli
+require'lspconfig'.graphql.setup {}
+
+-- yarn global add yaml-language-server
+require'lspconfig'.yamlls.setup {}
 require("lspkind").init({})
+
+vim.lsp.handlers['textDocument/signatureHelp'] =
+    vim.lsp.with(vim.lsp.handlers.signature_help, {border = 'single'})
+vim.lsp.handlers['textDocument/hover'] =
+    vim.lsp.with(vim.lsp.handlers.hover, {border = 'single'})
