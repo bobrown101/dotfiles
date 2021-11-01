@@ -33,6 +33,9 @@ end
 function M.telescope_grep()
     local root = M.GitRoot()
     require("telescope.builtin").live_grep({cwd = root})
+
+    --[[ require("telescope.builtin").live_grep(
+        require('telescope.themes').get_dropdown({cwd = root})) ]]
 end
 
 function M.telescope_buffers()

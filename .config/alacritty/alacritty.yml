@@ -22,8 +22,8 @@ env:
   # each instance of Alacritty. If it is not present, alacritty will
   # check the local terminfo database and use `alacritty` if it is
   # available, otherwise `xterm-256color` is used.
-  TERM: alacritty
   #TERM: xterm-256color
+  TERM: xterm-256color
 
 #window:
   # Window dimensions (changes require restart)
@@ -189,16 +189,28 @@ env:
 #       family: "Hack Nerd Font"
 #       style: Italic
 
+# font:
+#   size: 16
+#   normal:
+#       family: "mononoki NF"
+#       style: Regular
+#   bold:
+#       family: "mononoki NF"
+#       style: Bold
+#   italic:
+#       family: "mononoki NF"
+#       style: Italic
+
 font:
   size: 16
   normal:
-      family: "mononoki NF"
+      family: "Hack Nerd Font Mono"
       style: Regular
   bold:
-      family: "mononoki NF"
+      family: "Hack Nerd Font Mono"
       style: Bold
   italic:
-      family: "mononoki NF"
+      family: "Hack Nerd Font Mono"
       style: Italic
 
 # Colors (Gruvbox dark)

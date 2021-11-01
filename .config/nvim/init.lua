@@ -17,7 +17,6 @@ require('packer').startup(function()
     -- use { 'bobrown101/git-blame.nvim' }
     use {'wbthomason/packer.nvim'}
     use 'folke/tokyonight.nvim'
-    use {'morhetz/gruvbox'}
     use {'nvim-treesitter/nvim-treesitter'}
     use {'neovim/nvim-lspconfig'}
 
