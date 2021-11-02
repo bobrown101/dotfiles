@@ -1,6 +1,11 @@
-set PATH /usr/local/bin /usr/sbin $HOME/neovim/bin $HOME/.yarn/bin $HOME/.config/yarn/global/node_modules/.bin $PATH
+set PATH /usr/local/bin $PATH
+set PATH /usr/sbin $PATH
+set PATH $HOME/neovim/bin $PATH
+set PATH $HOME/.yarn/bin $PATH
+set PATH $HOME/.config/yarn/global/node_modules/.bin $PATH
 
 set EDITOR nvim
+
 
 function brewup
   brew update; brew upgrade; brew cleanup; brew doctor

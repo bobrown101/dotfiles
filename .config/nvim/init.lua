@@ -15,8 +15,13 @@ end
 require('packer').startup(function()
     use {'~/Developer/git_blame.nvim'}
     -- use { 'bobrown101/git-blame.nvim' }
+
+    -- use {'bobrown101/nvim_cmp_hs_translation_source'}
+    use {'~/Developer/nvim_cmp_hs_translation_source', config = function() end}
+
     use {'wbthomason/packer.nvim'}
     use 'folke/tokyonight.nvim'
+
     use {'nvim-treesitter/nvim-treesitter'}
     use {'neovim/nvim-lspconfig'}
 
@@ -53,7 +58,6 @@ require('null-ls-config')
 require("toggleterm-config")
 require("nvim-tree-config")
 
--- require('compe-config')
 require('cmp-config')
 
 require('kommentary_config')
@@ -62,4 +66,5 @@ require('telescope-config')
 require('treesitter-config')
 require('todo-comments-config')
 require('formatter-config')
-require('lyaml-completion')
+
+require('nvim_cmp_hs_translation_source').setup()

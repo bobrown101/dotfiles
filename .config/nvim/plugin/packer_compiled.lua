@@ -89,13 +89,9 @@ _G.packer_plugins = {
     loaded = true,
     path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/galaxyline.nvim"
   },
-  ["git-blame.nvim"] = {
+  ["git_blame.nvim"] = {
     loaded = true,
-    path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/git-blame.nvim"
-  },
-  gruvbox = {
-    loaded = true,
-    path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/gruvbox"
+    path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/git_blame.nvim"
   },
   kommentary = {
     loaded = true,
@@ -145,6 +141,11 @@ _G.packer_plugins = {
     loaded = true,
     path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/nvim-web-devicons"
   },
+  nvim_cmp_hs_translation_source = {
+    config = { "\27LJ\2\n\v\0\0\1\0\0\0\1K\0\1\0\0" },
+    loaded = true,
+    path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/nvim_cmp_hs_translation_source"
+  },
   ["packer.nvim"] = {
     loaded = true,
     path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/packer.nvim"
@@ -180,6 +181,10 @@ _G.packer_plugins = {
 }
 
 time([[Defining packer_plugins]], false)
+-- Config for: nvim_cmp_hs_translation_source
+time([[Config for nvim_cmp_hs_translation_source]], true)
+try_loadstring("\27LJ\2\n\v\0\0\1\0\0\0\1K\0\1\0\0", "config", "nvim_cmp_hs_translation_source")
+time([[Config for nvim_cmp_hs_translation_source]], false)
 if should_profile then save_profiles() end
 
 end)
