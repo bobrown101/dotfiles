@@ -52,26 +52,37 @@ local on_attach = function(client, bufnr)
                    {noremap = true, silent = true})
 end
 
+-- The nvim-cmp almost supports LSP's capabilities so You should advertise it to LSP servers..
 local capabilities = vim.lsp.protocol.make_client_capabilities()
-capabilities.textDocument.completion.completionItem.snippetSupport = true
-capabilities.textDocument.completion.completionItem.preselectSupport = true
-capabilities.textDocument.completion.completionItem.insertReplaceSupport = true
-capabilities.textDocument.completion.completionItem.labelDetailsSupport = true
-capabilities.textDocument.completion.completionItem.deprecatedSupport = true
-capabilities.textDocument.completion.completionItem.commitCharactersSupport =
-    true
-capabilities.textDocument.completion.completionItem.tagSupport = {
-    valueSet = {1}
-}
-capabilities.textDocument.completion.completionItem.resolveSupport = {
-    properties = {"documentation", "detail", "additionalTextEdits"}
-}
--- capabilities = require('cmp_nvim_lsp').update_capabilities(capabilities)
+capabilities = require('cmp_nvim_lsp').update_capabilities(capabilities)
+
+local customPublishDiagnosticFunction = function(_, result, ctx, config)
+    local filter = function(fun, t)
+        local res = {}
+        for _, item in ipairs(t) do
+            if fun(item) then res[#res + 1] = item end
+        end
+
+        return res
+    end
+    local raw_diagnostics = result.diagnostics
+
+    local filtered_diagnostics = filter(function(diagnostic)
+        local diagnostic_code = diagnostic.code
+        local diagnostic_source = diagnostic.source
+        return not (diagnostic_code == 7016 and diagnostic_source ==
+                   "typescript")
+    end, raw_diagnostics)
+
+    result.diagnostics = filtered_diagnostics
+
+    return vim.lsp.diagnostic.on_publish_diagnostics(_, result, ctx, config)
+end
 
 require("lspconfig").tsserver.setup({
     cmd = {
         "typescript-language-server", "--log-level", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
-        "1", "--tsserver-log-verbosity", "off", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
+        "4", "--tsserver-log-verbosity", "verbose", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
         "--tsserver-log-file", getLogPath(), "--tsserver-path",
         getTsserverPath(), "--stdio"
     },
@@ -81,10 +92,15 @@ require("lspconfig").tsserver.setup({
         "javascript", "javascriptreact", "javascript.jsx", "typescript",
         "typescriptreact", "typescript.tsx"
     },
-    --[[ commands = {
-        OrganizeImports = {organize_imports, description = "Organize Imports"}
-    }, ]]
+    handlers = {
+        ["textDocument/publishDiagnostics"] = vim.lsp.with(
+            customPublishDiagnosticFunction, {
+                -- Disable virtual_text
+                -- virtual_text = false
+            })
+    },
     capabilities = capabilities
+
 })
 
 -- npm install -g graphql-language-service-cli
@@ -96,5 +112,6 @@ require("lspkind").init({})
 
 vim.lsp.handlers['textDocument/signatureHelp'] =
     vim.lsp.with(vim.lsp.handlers.signature_help, {border = 'single'})
+
 vim.lsp.handlers['textDocument/hover'] =
     vim.lsp.with(vim.lsp.handlers.hover, {border = 'single'})

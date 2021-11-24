@@ -8,24 +8,20 @@ require("null-ls").config({
     sources = {
         require("null-ls").builtins.diagnostics.eslint_d,
         stylua = h.make_builtin({
-            method = { FORMATTING, RANGE_FORMATTING },
-            filetypes = { "lua" },
+            method = {FORMATTING, RANGE_FORMATTING},
+            filetypes = {"lua"},
             generator_opts = {
                 command = "stylua",
                 args = h.range_formatting_args_factory({
-                    "--search-parent-directories",
-                    "--indent-type",
-                    "Spaces",
-                    "--stdin-filepath",
-                    "$FILENAME",
-                    "-",
+                    "--search-parent-directories", "--indent-type", "Spaces",
+                    "--stdin-filepath", "$FILENAME", "-"
                 }),
-                to_stdin = true,
+                to_stdin = true
             },
-            factory = h.formatter_factory,
-        }),
+            factory = h.formatter_factory
+        })
     },
-    debug = false,
+    debug = false
 })
 
 require("lspconfig")["null-ls"].setup({})

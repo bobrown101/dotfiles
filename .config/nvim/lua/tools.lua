@@ -17,7 +17,6 @@ function M.LSPLogs()
 end
 
 function M.GitRoot()
-    -- https://github.com/nvim-telescope/telescope-project.nvim/blob/master/lua/telescope/_extensions/project_actions.lua
     local git_root = vim.fn.systemlist("git -C " .. vim.loop.cwd() ..
                                            " rev-parse --show-toplevel")[1]
     local project_directory = git_root
@@ -33,9 +32,6 @@ end
 function M.telescope_grep()
     local root = M.GitRoot()
     require("telescope.builtin").live_grep({cwd = root})
-
-    --[[ require("telescope.builtin").live_grep(
-        require('telescope.themes').get_dropdown({cwd = root})) ]]
 end
 
 function M.telescope_buffers()
@@ -70,15 +66,6 @@ function M.telescope_diagnostics(opts)
                 return {'echo', entry.text}
             end
         })
-        --[[ previewer = require('telescope.previewers').new({
-            setup = empty_function,
-            teardown = empty_function,
-            preview_fn = preview_fn,
-            title = "Full Diagnostic",
-            dynamic_title = fake_preview,
-            send_input = empty_function,
-            scroll_fn = empty_function
-        }) ]]
     }):find()
 
 end

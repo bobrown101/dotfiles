@@ -3,18 +3,18 @@ local cmp = require 'cmp'
 local lspkind = require 'lspkind'
 
 cmp.setup({
-    --[[ snippet = {
+    snippet = {
         expand = function(args)
             -- For `vsnip` user.
             -- vim.fn["vsnip#anonymous"](args.body) -- For `vsnip` user.
 
             -- For `luasnip` user.
-            -- require('luasnip').lsp_expand(args.body)
+            require('luasnip').lsp_expand(args.body)
 
             -- For `ultisnips` user.
             -- vim.fn["UltiSnips#Anon"](args.body)
         end
-    }, ]]
+    },
     mapping = {
         ["<Tab>"] = function(fallback)
             if cmp.visible() then
@@ -35,8 +35,8 @@ cmp.setup({
     },
     sources = {
         {name = "nvim_cmp_hs_translation_source"}, {name = 'nvim_lsp'},
-        {name = 'buffer'}, {name = 'path'}, {name = 'nvim_lua'},
-        {name = 'treesitter'}
+        {name = 'luasnip'}, {name = 'buffer'}, {name = 'path'},
+        {name = 'nvim_lua'}, {name = 'treesitter'}
     },
     formatting = {
         format = function(entry, vim_item)

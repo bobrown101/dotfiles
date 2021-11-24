@@ -16,8 +16,15 @@ require('packer').startup(function()
     use {'~/Developer/git_blame.nvim'}
     -- use { 'bobrown101/git-blame.nvim' }
 
-    -- use {'bobrown101/nvim_cmp_hs_translation_source'}
-    use {'~/Developer/nvim_cmp_hs_translation_source', config = function() end}
+    use {
+        'bobrown101/nvim_cmp_hs_translation_source',
+        config = function()
+            require('nvim_cmp_hs_translation_source').setup()
+        end
+    }
+
+    use 'L3MON4D3/LuaSnip'
+    use 'saadparwaiz1/cmp_luasnip'
 
     use {'wbthomason/packer.nvim'}
     use 'folke/tokyonight.nvim'
@@ -67,4 +74,3 @@ require('treesitter-config')
 require('todo-comments-config')
 require('formatter-config')
 
-require('nvim_cmp_hs_translation_source').setup()
