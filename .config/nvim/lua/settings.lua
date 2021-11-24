@@ -34,6 +34,7 @@ vim.o.clipboard = 'unnamedplus'
 vim.api.nvim_set_keymap("n", "<tab>",
                         ":if &modifiable && !&readonly && &modified <CR> :write<CR> :endif<CR>:bnext<CR>",
                         {noremap = true, silent = true})
+
 vim.api.nvim_set_keymap("n", "<s-tab>",
                         ":if &modifiable && !&readonly && &modified <CR> :write<CR> :endif<CR>:bprevious<CR>",
                         {noremap = true, silent = true})
@@ -55,4 +56,10 @@ vim.api.nvim_set_keymap("n", "<Left>", "<nop>", {noremap = true, silent = true})
 vim.api
     .nvim_set_keymap("n", "<Right>", "<nop>", {noremap = true, silent = true})
 
--- vim.api.nvim_set_keymap("t", "<Esc>", "<C-\><C-n>", {noremap = true, silent = true})
+vim.api.nvim_set_keymap("n", "_",
+                        "<cmd> lua vim.api.nvim_win_set_width(vim.api.nvim_get_current_win(), vim.api.nvim_win_get_width(vim.api.nvim_get_current_win()) - 5)<CR>",
+                        {noremap = true, silent = true})
+
+vim.api.nvim_set_keymap("n", "+",
+                        "<cmd> lua vim.api.nvim_win_set_width(vim.api.nvim_get_current_win(), vim.api.nvim_win_get_width(vim.api.nvim_get_current_win()) + 5)<CR>",
+                        {noremap = true, silent = true})
