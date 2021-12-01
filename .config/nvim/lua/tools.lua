@@ -1,6 +1,4 @@
 local api = vim.api
-local a = require("plenary.async")
-local luv = vim.loop
 
 local Job = require("plenary.job")
 local log = require("plenary.log").new({
@@ -9,6 +7,7 @@ local log = require("plenary.log").new({
 })
 
 local M = {}
+
 M.path_sep = vim.loop.os_uname().sysname == "Windows" and "\\" or "/"
 
 function M.LSPLogs()
@@ -39,9 +38,6 @@ function M.telescope_buffers()
     require('telescope.builtin').buffers({initial_mode = "normal"})
 end
 
-local function empty_function() end
-local function preview_fn(self, entry, status) return entry.value end
-local function fake_preview() return "hey brady" end
 function M.telescope_diagnostics(opts)
     opts = {}
     local utils = require "telescope.utils"
@@ -111,5 +107,14 @@ function M.is_dir(filename)
 end
 
 function M.open_file(file) vim.cmd("e " .. file) end
+
+function M.FileExplorer()
+    if M.FileExplorerHasAlreadyBeenOpened == true then
+        vim.cmd("Rex")
+    else
+        vim.cmd("Ex")
+        M.FileExplorerHasAlreadyBeenOpened = true;
+    end
+end
 
 return M

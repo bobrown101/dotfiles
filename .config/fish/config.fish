@@ -35,6 +35,11 @@ function gr
   end
 end
 
+# will require "brew install coreutils"
+function open_location_of
+  open (dirname (greadlink -f (which $argv)))
+end
+
 #. ~/.hubspot/shellrc
 
 
