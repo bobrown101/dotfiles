@@ -174,13 +174,12 @@ gls.left[10] = {
     }
 }
 
-gls.left[11] = {
-    DiagnosticError = {
-        provider = "DiagnosticError",
-        icon = "   ",
-        highlight = {colors.red, colors.bg}
-    }
-}
+-- gls.left[11] = {
+--     DiagnosticError = {
+--         provider = "DiagnosticError",
+--         icon = "   ",
+--         highlight = {colors.red, colors.bg}
+--     }
 
 gls.left[12] = {
     Space = {
@@ -189,13 +188,13 @@ gls.left[12] = {
     }
 }
 
-gls.left[13] = {
-    DiagnosticWarn = {
-        provider = "DiagnosticWarn",
-        icon = "   ",
-        highlight = {colors.green, colors.bg}
-    }
-}
+-- gls.left[13] = {
+--     DiagnosticWarn = {
+--         provider = "DiagnosticWarn",
+--         icon = "   ",
+--         highlight = {colors.green, colors.bg}
+--     }
+-- }
 
 gls.left[14] = {
     Space = {
@@ -204,13 +203,13 @@ gls.left[14] = {
     }
 }
 
-gls.left[15] = {
-    DiagnosticInfo = {
-        provider = "DiagnosticInfo",
-        icon = "   ",
-        highlight = {colors.blue, colors.bg}
-    }
-}
+-- gls.left[15] = {
+--     DiagnosticInfo = {
+--         provider = "DiagnosticInfo",
+--         icon = "   ",
+--         highlight = {colors.blue, colors.bg}
+--     }
+-- }
 
 gls.left[16] = {
     Space = {
@@ -219,13 +218,13 @@ gls.left[16] = {
     }
 }
 
-gls.left[17] = {
-    DiagnosticHint = {
-        provider = "DiagnosticHint",
-        icon = "   ",
-        highlight = {colors.blue, colors.bg}
-    }
-}
+-- gls.left[17] = {
+--     DiagnosticHint = {
+--         provider = "DiagnosticHint",
+--         icon = "   ",
+--         highlight = {colors.blue, colors.bg}
+--     }
+-- }
 
 ----------------------------=== Middle ===--------------------------
 -- gls.mid[1] = {

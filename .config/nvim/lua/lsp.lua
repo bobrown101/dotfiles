@@ -27,29 +27,29 @@ end
 end ]]
 
 local on_attach = function(client, bufnr)
-    local function buf_set_keymap(...)
-        vim.api.nvim_buf_set_keymap(bufnr, ...)
-    end
-    local function buf_set_option(...)
-        vim.api.nvim_buf_set_option(bufnr, ...)
-    end
-
-    buf_set_keymap("n", "<space>gd", "<cmd>lua vim.lsp.buf.definition()<CR>",
-                   {noremap = true, silent = true})
-    buf_set_keymap("n", "<space>gi",
-                   "<cmd>lua vim.lsp.buf.implementation()<CR>",
-                   {noremap = true, silent = true})
-    buf_set_keymap("n", "<space>gr", "<cmd>lua vim.lsp.buf.references()<CR>",
-                   {noremap = true, silent = true})
-    buf_set_keymap("n", "<space>rn", "<cmd>lua vim.lsp.buf.rename()<CR>",
-                   {noremap = true, silent = true})
-    buf_set_keymap("n", "K", "<cmd>lua vim.lsp.buf.hover()<CR>",
-                   {noremap = true, silent = true})
-    buf_set_keymap("n", "<space>ga", "<cmd>lua vim.lsp.buf.code_action()<CR>",
-                   {noremap = true, silent = true})
-    buf_set_keymap("n", "<space>gsd",
-                   "<cmd>lua vim.lsp.buf.show_line_diagnostics({ focusable = false })<CR>",
-                   {noremap = true, silent = true})
+    -- local function buf_set_keymap(...)
+    --     vim.api.nvim_buf_set_keymap(bufnr, ...)
+    -- end
+    -- local function buf_set_option(...)
+    --     vim.api.nvim_buf_set_option(bufnr, ...)
+    -- end
+    --
+    -- buf_set_keymap("n", "<space>gd", "<cmd>lua vim.lsp.buf.definition()<CR>",
+    --                {noremap = true, silent = true})
+    -- buf_set_keymap("n", "<space>gi",
+    --                "<cmd>lua vim.lsp.buf.implementation()<CR>",
+    --                {noremap = true, silent = true})
+    -- buf_set_keymap("n", "<space>gr", "<cmd>lua vim.lsp.buf.references()<CR>",
+    --                {noremap = true, silent = true})
+    -- buf_set_keymap("n", "<space>rn", "<cmd>lua vim.lsp.buf.rename()<CR>",
+    --                {noremap = true, silent = true})
+    -- buf_set_keymap("n", "K", "<cmd>lua vim.lsp.buf.hover()<CR>",
+    --                {noremap = true, silent = true})
+    -- buf_set_keymap("n", "<space>ga", "<cmd>lua vim.lsp.buf.code_action()<CR>",
+    --                {noremap = true, silent = true})
+    -- buf_set_keymap("n", "<space>gsd",
+    --                "<cmd>lua vim.lsp.buf.show_line_diagnostics({ focusable = false })<CR>",
+    --                {noremap = true, silent = true})
 end
 
 -- The nvim-cmp almost supports LSP's capabilities so You should advertise it to LSP servers..
@@ -115,3 +115,23 @@ vim.lsp.handlers['textDocument/signatureHelp'] =
 
 vim.lsp.handlers['textDocument/hover'] =
     vim.lsp.with(vim.lsp.handlers.hover, {border = 'single'})
+
+vim.api.nvim_set_keymap("n", "<space>gd",
+                        "<cmd>lua vim.lsp.buf.definition()<CR>",
+                        {noremap = true, silent = true})
+vim.api.nvim_set_keymap("n", "<space>gi",
+                        "<cmd>lua vim.lsp.buf.implementation()<CR>",
+                        {noremap = true, silent = true})
+vim.api.nvim_set_keymap("n", "<space>gr",
+                        "<cmd>lua vim.lsp.buf.references()<CR>",
+                        {noremap = true, silent = true})
+vim.api.nvim_set_keymap("n", "<space>rn", "<cmd>lua vim.lsp.buf.rename()<CR>",
+                        {noremap = true, silent = true})
+vim.api.nvim_set_keymap("n", "K", "<cmd>lua vim.lsp.buf.hover()<CR>",
+                        {noremap = true, silent = true})
+vim.api.nvim_set_keymap("n", "<space>ga",
+                        "<cmd>lua vim.lsp.buf.code_action()<CR>",
+                        {noremap = true, silent = true})
+vim.api.nvim_set_keymap("n", "<space>gsd",
+                        "<cmd>lua vim.lsp.buf.show_line_diagnostics({ focusable = false })<CR>",
+                        {noremap = true, silent = true})
