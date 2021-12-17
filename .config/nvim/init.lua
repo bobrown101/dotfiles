@@ -117,6 +117,17 @@ require('packer').startup(function()
     }
 
     use {"luukvbaal/nnn.nvim", config = function() require("nnn").setup() end}
+
+    use {
+        "lukas-reineke/indent-blankline.nvim",
+        config = function()
+            vim.opt.listchars:append("space:⋅")
+            vim.opt.listchars:append("eol:↴")
+
+            require("indent_blankline").setup {}
+
+        end
+    }
 end)
 
 require('settings')
