@@ -7,6 +7,7 @@ set PATH $HOME/.config/yarn/global/node_modules/.bin $PATH
 set EDITOR nvim
 
 set NODE_ARGS --max_old_space_size=8192
+set IS_HUBSPOT_MACHINE "yes"
 
 function brewup
   brew update; brew upgrade; brew cleanup; brew doctor
@@ -43,4 +44,7 @@ end
 #. ~/.hubspot/shellrc
 
 
-
+# this will take the install paths of luarocks and add them to fishs path
+# installation docs https://github.com/luarocks/luarocks/wiki/Installation-instructions-for-Unix
+# https://github.com/Koihik/LuaFormatter
+for i in (luarocks path | awk '{sub(/PATH=/, "PATH ", $2); print "set -gx "$2}'); eval $i; end

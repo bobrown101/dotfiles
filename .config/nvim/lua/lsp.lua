@@ -1,6 +1,21 @@
 local util = require("lspconfig/util")
 local Job = require("plenary.job")
 
+function getIsHubspotMachine()
+    local result = ""
+    local testing = {}
+    Job:new({
+        command = "ls",
+        args = {vim.env.HOME .. '/.isHubspotMachine'},
+        on_exit = function(j, return_val)
+          result = return_val
+          testing = j
+        end
+    }):sync()
+     
+    return return_val == 0
+end
+
 function getLogPath() return vim.lsp.get_log_path() end
 
 function getTsserverPath()
@@ -16,15 +31,6 @@ function getTsserverPath()
 
     return result
 end
-
---[[ local function organize_imports()
-    local params = {
-        command = "_typescript.organizeImports",
-        arguments = {vim.api.nvim_buf_get_name(0)},
-        title = ""
-    }
-    vim.lsp.buf.execute_command(params)
-end ]]
 
 local on_attach = function(client, bufnr)
     -- local function buf_set_keymap(...)
@@ -79,6 +85,10 @@ local customPublishDiagnosticFunction = function(_, result, ctx, config)
     return vim.lsp.diagnostic.on_publish_diagnostics(_, result, ctx, config)
 end
 
+local isHubspotMachine = getIsHubspotMachine()
+
+if isHubspotMachine then
+
 require("lspconfig").tsserver.setup({
     cmd = {
         "typescript-language-server", "--log-level", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
@@ -102,6 +112,9 @@ require("lspconfig").tsserver.setup({
     capabilities = capabilities
 
 })
+else
+require("lspconfig").tsserver.setup({})
+end
 
 -- npm install -g graphql-language-service-cli
 require'lspconfig'.graphql.setup {}

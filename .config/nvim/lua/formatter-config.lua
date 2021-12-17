@@ -124,8 +124,9 @@ require('formatter').setup({
             end
         },
 
+        -- https://github.com/luarocks/luarocks/wiki/Installation-instructions-for-Unix
+        -- luarocks install --server=https://luarocks.org/dev luaformatter
         lua = {
-            -- https://github.com/Koihik/LuaFormatter
             function()
                 return {
                     exe = "lua-format",
