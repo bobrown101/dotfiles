@@ -34,8 +34,8 @@ cmp.setup({
         ['<CR>'] = cmp.mapping(cmp.mapping.confirm({select = true}), {'i', 's'})
     },
     sources = {
-        {name = "nvim_cmp_hs_translation_source"}, {name = 'nvim_lsp'},
-        {name = 'luasnip'}, {name = 'buffer'}, {name = 'path'},
+        {name = 'path'}, {name = "nvim_cmp_hs_translation_source"},
+        {name = 'nvim_lsp'}, {name = 'luasnip'}, {name = 'buffer'},
         {name = 'nvim_lua'}, {name = 'treesitter'}
     },
     formatting = {

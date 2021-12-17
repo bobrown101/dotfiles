@@ -82,7 +82,7 @@ end
 require("lspconfig").tsserver.setup({
     cmd = {
         "typescript-language-server", "--log-level", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
-        "4", "--tsserver-log-verbosity", "verbose", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
+        "2", "--tsserver-log-verbosity", "terse", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
         "--tsserver-log-file", getLogPath(), "--tsserver-path",
         getTsserverPath(), "--stdio"
     },

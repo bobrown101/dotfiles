@@ -15,7 +15,7 @@ end
 require('packer').startup(function()
 
     use {'wbthomason/packer.nvim'}
-    -- use {'~/Developer/git_blame.nvim'}
+    use {'~/Developer/git_blame.nvim'}
     -- use { 'bobrown101/git-blame.nvim' }
     use 'L3MON4D3/LuaSnip'
     use 'saadparwaiz1/cmp_luasnip'
@@ -28,6 +28,13 @@ require('packer').startup(function()
     use {'hrsh7th/cmp-nvim-lsp'}
     use {'hrsh7th/cmp-nvim-lua'}
     use {'hrsh7th/cmp-buffer'}
+    use {
+        'bobrown101/nvim_cmp_hs_translation_source',
+        config = function()
+            require('nvim_cmp_hs_translation_source').setup()
+        end
+    }
+
     use {'hrsh7th/nvim-cmp'}
 
     use {'glepnir/galaxyline.nvim'}
@@ -66,7 +73,7 @@ require('packer').startup(function()
                                     "<cmd>lua require('tools').telescope_buffers()<cr>",
                                     {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<space>d',
-                                    "<cmd>lua require('tools').telescope_diagnostics()<cr>",
+                                    "<cmd>lua vim.diagnostic.open_float()<cr>",
                                     {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<space>sh', "<cmd>:split<CR>",
                                     {noremap = true, silent = true})
@@ -97,7 +104,19 @@ require('packer').startup(function()
         end
     }
 
-    use {'jose-elias-alvarez/null-ls.nvim'}
+    use {
+        'jose-elias-alvarez/null-ls.nvim',
+        config = function()
+            require("null-ls").setup({
+                sources = {
+                    require("null-ls").builtins.diagnostics.eslint_d,
+                    require("null-ls").builtins.formatting.stylua
+                }
+            })
+        end
+    }
+
+    use {"luukvbaal/nnn.nvim", config = function() require("nnn").setup() end}
 end)
 
 require('settings')
@@ -105,7 +124,6 @@ require('theme')
 require('lsp')
 require('asset-bender')
 require('hubspot-js-utils')
-require('null-ls-config')
 require("comment-nvim-config")
 require('cmp-config')
 require('bubbles-line')

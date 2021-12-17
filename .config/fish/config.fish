@@ -6,7 +6,7 @@ set PATH $HOME/.config/yarn/global/node_modules/.bin $PATH
 
 set EDITOR nvim
 
-set NODE_ARGS '--max_old_space_size=8192'
+set NODE_ARGS --max_old_space_size=8192
 
 function brewup
   brew update; brew upgrade; brew cleanup; brew doctor
@@ -25,7 +25,7 @@ function t
 end
 
 function pretty
-  bpx hs-prettier --write (git diff --name-only --cached)
+  bpx hs-prettier --write (git diff --name-only --cached) && git add (git diff --name-only --cached)
 end
 
 function gr
