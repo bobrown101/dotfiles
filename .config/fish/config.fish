@@ -3,6 +3,8 @@ set PATH /usr/sbin $PATH
 set PATH $HOME/neovim/bin $PATH
 set PATH $HOME/.yarn/bin $PATH
 set PATH $HOME/.config/yarn/global/node_modules/.bin $PATH
+set PATH $HOME/.cargo/bin $PATH
+set PATH $HOME/Developer/alacritty/target/release $PATH
 
 set EDITOR nvim
 

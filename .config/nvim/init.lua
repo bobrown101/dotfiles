@@ -15,8 +15,10 @@ end
 require('packer').startup(function()
 
     use {'wbthomason/packer.nvim'}
-    use {'~/Developer/git_blame.nvim'}
-
+    use {'bobrown101/git_blame.nvim', config = function() 
+      vim.api.nvim_set_keymap('n', '<space>g', "<cmd>lua require('git_blame').run()<cr>", { noremap = true, silent = true })
+      end 
+    }
     use {
         'lewis6991/gitsigns.nvim',
         requires = {'nvim-lua/plenary.nvim'},
