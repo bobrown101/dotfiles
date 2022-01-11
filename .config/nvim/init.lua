@@ -128,7 +128,6 @@ require('packer').startup(function()
         "lukas-reineke/indent-blankline.nvim",
         config = function()
             vim.opt.listchars:append("space:⋅")
-            vim.opt.listchars:append("eol:↴")
 
             require("indent_blankline").setup {}
 

@@ -47,4 +47,4 @@ end
 # this will take the install paths of luarocks and add them to fishs path
 # installation docs https://github.com/luarocks/luarocks/wiki/Installation-instructions-for-Unix
 # https://github.com/Koihik/LuaFormatter
-for i in (luarocks path | awk '{sub(/PATH=/, "PATH ", $2); print "set -gx "$2}'); eval $i; end
+#for i in (luarocks path | awk '{sub(/PATH=/, "PATH ", $2); print "set -gx "$2}'); eval $i; end
