@@ -16,7 +16,13 @@ require('packer').startup(function()
 
     use {'wbthomason/packer.nvim'}
     use {'~/Developer/git_blame.nvim'}
-    -- use { 'bobrown101/git-blame.nvim' }
+
+    use {
+        'lewis6991/gitsigns.nvim',
+        requires = {'nvim-lua/plenary.nvim'},
+        config = function() require('gitsigns').setup() end
+    }
+
     use 'L3MON4D3/LuaSnip'
     use 'saadparwaiz1/cmp_luasnip'
 
