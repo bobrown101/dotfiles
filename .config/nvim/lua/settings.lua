@@ -31,13 +31,17 @@ vim.o.updatetime = 200
 vim.o.timeoutlen = 500
 vim.o.clipboard = 'unnamedplus'
 
-vim.api.nvim_set_keymap("n", "<tab>",
-                        ":if &modifiable && !&readonly && &modified <CR> :write<CR> :endif<CR>:bnext<CR>",
-                        {noremap = true, silent = true})
+-- vim.api.nvim_set_keymap("n", "<tab>",
+-- ":if &modifiable && !&readonly && &modified <CR> :write<CR> :endif<CR>:bnext<CR>",
+-- {noremap = true, silent = true})
 
-vim.api.nvim_set_keymap("n", "<s-tab>",
-                        ":if &modifiable && !&readonly && &modified <CR> :write<CR> :endif<CR>:bprevious<CR>",
-                        {noremap = true, silent = true})
+-- vim.api.nvim_set_keymap("n", "<s-tab>",
+-- ":if &modifiable && !&readonly && &modified <CR> :write<CR> :endif<CR>:bprevious<CR>",
+-- {noremap = true, silent = true})
+
+-- vim.api.nvim_set_keymap("n", "<tab>",
+--                         "<cmd> lua require'telescope.builtin'.buffers(require('telescope.themes').get_dropdown({ })) <CR>",
+--                         {noremap = true, silent = true})
 
 -- " Use leader and hjkl to navigate windows
 vim.api.nvim_set_keymap("n", "<leader>h", "<cmd> wincmd h <CR>",
@@ -65,5 +69,6 @@ vim.api.nvim_set_keymap("n", "+",
                         {noremap = true, silent = true})
 
 -- vim.api.nvim_set_keymap("n", "-", ":lua require('tools').FileExplorer()<CR>", {noremap = true, silent = true})
-vim.api.nvim_set_keymap("n", "-", ":lua require('nnn').toggle('picker')<CR>",
+vim.api.nvim_set_keymap("n", "-",
+                        ":lua require('nnn').toggle('picker', '%:p:h')<CR>", -- the second arg is to represent "open in the current directory"
                         {noremap = true, silent = true})

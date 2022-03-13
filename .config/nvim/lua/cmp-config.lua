@@ -1,4 +1,6 @@
 -- Setup nvim-cmp.
+vim.opt.completeopt = {"menu", "menuone", "noselect"}
+
 local cmp = require 'cmp'
 local lspkind = require 'lspkind'
 local Job = require("plenary.job")

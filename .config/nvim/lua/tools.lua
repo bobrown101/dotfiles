@@ -34,8 +34,7 @@ function M.telescope_grep()
 end
 
 function M.telescope_buffers()
-    local root = M.GitRoot()
-    require('telescope.builtin').buffers({initial_mode = "normal"})
+    require('telescope.builtin').buffers(require('telescope.themes').get_dropdown({initial_mode = "normal", layout_config = {width = 0.8}}))
 end
 
 function M.telescope_diagnostics(opts)

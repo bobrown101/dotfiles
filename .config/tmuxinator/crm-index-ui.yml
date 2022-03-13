@@ -46,4 +46,4 @@ root: ~/Developer/crm-index-ui
 
 windows:
   - editor: v .
-  - bender: bend yarn && bend reactor serve . --update
+  - bender: bend yarn && NODE_ARGS=--max_old_space_size=16384  bend reactor serve ./crm-index-ui  --ts-watch --update

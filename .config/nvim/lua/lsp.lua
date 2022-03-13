@@ -8,15 +8,17 @@ function getIsHubspotMachine()
         command = "ls",
         args = {vim.env.HOME .. '/.isHubspotMachine'},
         on_exit = function(j, return_val)
-          result = return_val
-          testing = j
+            result = return_val
+            testing = j
         end
     }):sync()
-     
-    return return_val == 0
+    return result == 0
 end
 
 function getLogPath() return vim.lsp.get_log_path() end
+-- function getLogPath() return '/Users/brbrown/.cache/nvim/tsserver.log' end
+
+function getTsserverLogPath() return "/Users/brbrown/.cache/nvim/tsserver.log" end
 
 function getTsserverPath()
     local result = "/lib/tsserver.js"
@@ -31,36 +33,6 @@ function getTsserverPath()
 
     return result
 end
-
-local on_attach = function(client, bufnr)
-    -- local function buf_set_keymap(...)
-    --     vim.api.nvim_buf_set_keymap(bufnr, ...)
-    -- end
-    -- local function buf_set_option(...)
-    --     vim.api.nvim_buf_set_option(bufnr, ...)
-    -- end
-    --
-    -- buf_set_keymap("n", "<space>gd", "<cmd>lua vim.lsp.buf.definition()<CR>",
-    --                {noremap = true, silent = true})
-    -- buf_set_keymap("n", "<space>gi",
-    --                "<cmd>lua vim.lsp.buf.implementation()<CR>",
-    --                {noremap = true, silent = true})
-    -- buf_set_keymap("n", "<space>gr", "<cmd>lua vim.lsp.buf.references()<CR>",
-    --                {noremap = true, silent = true})
-    -- buf_set_keymap("n", "<space>rn", "<cmd>lua vim.lsp.buf.rename()<CR>",
-    --                {noremap = true, silent = true})
-    -- buf_set_keymap("n", "K", "<cmd>lua vim.lsp.buf.hover()<CR>",
-    --                {noremap = true, silent = true})
-    -- buf_set_keymap("n", "<space>ga", "<cmd>lua vim.lsp.buf.code_action()<CR>",
-    --                {noremap = true, silent = true})
-    -- buf_set_keymap("n", "<space>gsd",
-    --                "<cmd>lua vim.lsp.buf.show_line_diagnostics({ focusable = false })<CR>",
-    --                {noremap = true, silent = true})
-end
-
--- The nvim-cmp almost supports LSP's capabilities so You should advertise it to LSP servers..
-local capabilities = vim.lsp.protocol.make_client_capabilities()
-capabilities = require('cmp_nvim_lsp').update_capabilities(capabilities)
 
 local customPublishDiagnosticFunction = function(_, result, ctx, config)
     local filter = function(fun, t)
@@ -85,39 +57,50 @@ local customPublishDiagnosticFunction = function(_, result, ctx, config)
     return vim.lsp.diagnostic.on_publish_diagnostics(_, result, ctx, config)
 end
 
+local on_attach = function(client, bufnr) end
+
+-- The nvim-cmp almost supports LSP's capabilities so You should advertise it to LSP servers..
+local capabilities = vim.lsp.protocol.make_client_capabilities()
+capabilities = require('cmp_nvim_lsp').update_capabilities(capabilities)
+
 local isHubspotMachine = getIsHubspotMachine()
 
 if isHubspotMachine then
+    print('Configuring tsserver for hubspot ecosystem')
+    -- this is for debugging
+    --     "typescript-language-server", "--log-level", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
+    -- "4", "--tsserver-log-verbosity", "verbose", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
+    -- "--tsserver-log-file", getTsserverLogPath(), "--tsserver-path",
+    -- getTsserverPath(), "--stdio"
 
-require("lspconfig").tsserver.setup({
-    cmd = {
-        "typescript-language-server", "--log-level", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
-        "2", "--tsserver-log-verbosity", "terse", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
-        "--tsserver-log-file", getLogPath(), "--tsserver-path",
-        getTsserverPath(), "--stdio"
-    },
-    on_attach = on_attach,
-    root_dir = util.root_pattern(".git"),
-    filetypes = {
-        "javascript", "javascriptreact", "javascript.jsx", "typescript",
-        "typescriptreact", "typescript.tsx"
-    },
-    handlers = {
-        ["textDocument/publishDiagnostics"] = vim.lsp.with(
-            customPublishDiagnosticFunction, {
-                -- Disable virtual_text
-                -- virtual_text = false
-            })
-    },
-    capabilities = capabilities
+    require("lspconfig").tsserver.setup({
+        flags = {debounce_text_changes = 500},
+        cmd = {
+            "typescript-language-server", "--log-level", "1", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
+            "--tsserver-log-verbosity", "off", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
+            "--tsserver-log-file", getTsserverLogPath(), "--tsserver-path",
+            getTsserverPath(), "--stdio"
+        },
+        on_attach = on_attach,
+        root_dir = util.root_pattern(".git"),
+        handlers = {
+            ["textDocument/publishDiagnostics"] = vim.lsp.with(
+                customPublishDiagnosticFunction, {})
+        },
+        init_options = {hostInfo = "neovim"},
+        filetypes = {
+            "javascript", "javascriptreact", "javascript.jsx", "typescript",
+            "typescriptreact", "typescript.tsx"
+        },
+        capabilities = capabilities
 
-})
+    })
 else
-require("lspconfig").tsserver.setup({})
+    require("lspconfig").tsserver.setup({})
 end
 
 -- npm install -g graphql-language-service-cli
-require'lspconfig'.graphql.setup {}
+-- require'lspconfig'.graphql.setup {}
 
 -- yarn global add yaml-language-server
 require'lspconfig'.yamlls.setup {}
@@ -148,3 +131,8 @@ vim.api.nvim_set_keymap("n", "<space>ga",
 vim.api.nvim_set_keymap("n", "<space>gsd",
                         "<cmd>lua vim.lsp.buf.show_line_diagnostics({ focusable = false })<CR>",
                         {noremap = true, silent = true})
+
+-- FAQ
+-- [ERROR][2022-02-22 11:10:04] ...lsp/handlers.lua:454 "[tsserver] /bin/sh: /usr/local/Cellar/node/17.5.0/bin/npm: No such file or directory\n"
+--    ln -s (which npm) /usr/local/Cellar/node/17.5.0/bin/npm
+--      

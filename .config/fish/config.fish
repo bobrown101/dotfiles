@@ -28,7 +28,7 @@ function t
 end
 
 function pretty
-  bpx hs-prettier --write (git diff --name-only --cached) && git add (git diff --name-only --cached)
+  bend prettier --write (git diff --name-only --cached) && git add (git diff --name-only --cached)
 end
 
 function gr
