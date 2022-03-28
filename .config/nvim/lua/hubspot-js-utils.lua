@@ -7,126 +7,155 @@ local is_dir = require('tools').is_dir
 local file_exists = require('tools').file_exists
 local path_join = require('tools').path_join
 local open_file = require('tools').open_file
-local Job = require'plenary.job'
+local Job = require 'plenary.job'
 local log = require('plenary.log').new({
-  plugin = 'hubspot-js-utils',
-  use_console = true,
+    plugin = 'hubspot-js-utils',
+    use_console = true
 })
 
-
-local open_mode = luv.constants.O_CREAT + luv.constants.O_WRONLY + luv.constants.O_TRUNC
-local path_sep = vim.loop.os_uname().sysname == "Windows" and "\\" or "/"
 local M = {}
 
+local function get_full_file_path_of_current_buffer() return
+    vim.fn.expand('%:p') end
 
-local function get_file_location(filepath)
-    return string.match(filepath, "^(.+)/.+$")
+local function get_file_extension_from_path(path)
+    local lastdotpos = (path:reverse()):find("%.")
+    return (path:sub(1 - lastdotpos))
 end
 
-local function get_file_name(filepath)
-    return string.match(filepath, "^.+/(.+)$")
-end
-
-local function clear_prompt()
-    vim.api.nvim_command("normal :esc<CR>")
-end
-
-local function get_user_input_char()
-    local c = vim.fn.getchar()
-    while type(c) ~= "number" do
-        c = vim.fn.getchar()
-    end
-    return vim.fn.nr2char(c)
-end
-
-local function create_file(file)
-    -- we want to strip this out to the filename and folder location
-    local file_location = get_file_location(file)
-    local file_name = get_file_name(file)
-
-    if luv.fs_access(file, "r") ~= false then
-        log.info(file .. " already exists. Overwrite? y/n")
-        local ans = get_user_input_char()
-        clear_prompt()
-        if ans ~= "y" then
-            return
-        end
-    end
-    luv.fs_mkdir(file_location, 493)
-    luv.fs_open(
-        file,
-        "w",
-        open_mode,
-        vim.schedule_wrap(function(err, fd)
-            if err then
-                api.nvim_err_writeln("Couldn't create file " .. file)
-            else
-                -- FIXME: i don't know why but libuv keeps creating file with executable permissions
-                -- this is why we need to chmod to default file permissions
-                luv.fs_chmod(file, 420)
-                luv.fs_close(fd)
-            end
-        end)
-    )
-end
-
-function M.test_file()
+local function verify_filetype_is_valid()
     local bufnr = vim.api.nvim_get_current_buf()
     local buf_filetype = vim.api.nvim_buf_get_option(bufnr, "filetype")
 
     -- Filter which files we are considering.
     if not filetypes[buf_filetype] then
         log.error('current filetype is not relevant "', buf_filetype, '"')
-        return
+        return false
     end
+    return true
+end
 
+local function verify_static_test_dir_exists()
+    local bufnr = vim.api.nvim_get_current_buf()
     local static_root_dir = buffer_find_root_dir(bufnr, function(dir)
-        -- log.file_debug(dir)
-        -- log.file_debug("is js a dir", path_join(dir, "js"), is_dir(path_join(dir, "js")))
-        -- log.file_debug("is test a dir", path_join(dir, "js"), is_dir(path_join(dir, "test")))
-
         return is_dir(path_join(dir, "js")) and is_dir(path_join(dir, "test"))
     end)
 
     -- We couldn't find a root directory, so ignore this file.
     if not static_root_dir then
         log.error("No test directory found, ending")
-        return
+        return false
     end
+    return true
+end
 
-    -- log.file_debug("found static root dir of", static_root_dir)
-    local buff_file_path = vim.api.nvim_buf_get_name(bufnr)
-    -- log.file_debug("from current file path of ", buff_file_path)
+local function get_dirname_of_filepath(filepath)
+    local result = ""
+    Job:new({
+        command = "dirname",
+        args = {filepath},
+        on_exit = function(j, return_val)
+            local path = j:result()[1]
+            result = path .. result
+        end
+    }):sync()
+    return result
+end
 
-    -- strip off everything before /static/js/ (including that substring)
-    -- and replace the ending of .js with -test.js
-    -- and then we have our new file location
-    local _, stripUntil = string.find(buff_file_path, "/static/js/")
-    local path_within_static_dir = buff_file_path:sub(stripUntil + 1)
+local function mkdirp(path)
+    local result = nil
+    Job:new({
+        command = "mkdir",
+        args = {"-p", filepath},
+        on_exit = function(j, return_val) result = j:result() end
+    }):sync()
+    return result
+end
 
-    local test_file_path = string.gsub(path_within_static_dir, ".js", "-test.js")
+local function touchFile(filepath)
+    local result = nil
+    Job:new({
+        command = "touch",
+        args = {filepath},
+        on_exit = function(j, return_val) result = j:result() end
+    }):sync()
+    return result
+end
 
-    local suggested_location = path_join(static_root_dir, "test", "spec", test_file_path)
+local function writeLineToFile(filepath, line)
+    local f = assert(io.open(filepath, "a"))
+    f:write(line, "\n")
+    f:close()
+end
+
+local function get_substring_before_and_after_match(mainstring, substring)
+    local indexBeforeSubstring, indexAfterSubstring =
+        string.find(mainstring, substring)
+
+    local before = mainstring:sub(0, indexBeforeSubstring - 1) -- sub means substring
+    local after = mainstring:sub(indexAfterSubstring + 1) -- sub means substring
+
+    return {before = before, after = after}
+end
+
+local function generate_testfilepath_from_currentfilepath(currentfilepath)
+    local filepathBeforeAfterStaticJs = get_substring_before_and_after_match(
+                                            currentfilepath, "/static/js/")
+
+    local currentfilepathextension = get_file_extension_from_path(
+                                         currentfilepath)
+
+    local relativePath = string.gsub(filepathBeforeAfterStaticJs.after,
+                                     "." .. currentfilepathextension,
+                                     "-test." .. currentfilepathextension)
+
+    local result = path_join(filepathBeforeAfterStaticJs.before, "static",
+                             "test", "spec", relativePath)
+
+    return result
+end
+
+local function touch_file_recursive(filepath)
+    local dirname = get_dirname_of_filepath(filepath)
+    mkdirp(dirname)
+    touchFile(filepath)
+    writeLineToFile(filepath, "//Auto generated from nvim-hubspot-js-utils")
+    writeLineToFile(filepath, "")
+    writeLineToFile(filepath, "describe(\"" ..
+                        get_substring_before_and_after_match(filepath,
+                                                             "/static/test/spec/").after ..
+                        "\", () => {")
+    writeLineToFile(filepath, "//")
+    writeLineToFile(filepath, "})")
+
+end
+
+function M.test_file()
+
+    if verify_filetype_is_valid() == false then return end
+    if verify_static_test_dir_exists() == false then return end
+
+    local buff_file_path = get_full_file_path_of_current_buffer()
+    local suggested_location = generate_testfilepath_from_currentfilepath(
+                                   buff_file_path)
 
     if file_exists(suggested_location) then
-      -- log.file_debug('Test file found, opening')
-      open_file(suggested_location)
-      return
+        open_file(suggested_location)
+        return
     end
-
-    -- log.file_debug("test file path will be", suggested_location)
 
     local new_file_location = vim.fn.input({
         prompt = "New test file: ",
         default = suggested_location,
-        cancelreturn = nil,
+        cancelreturn = nil
     })
 
     if new_file_location ~= "" then
-        -- log.file_debug("below will be split file location")
+        touch_file_recursive(new_file_location)
         open_file(new_file_location)
     else
-        log.error("New test file location is invalid - not creating '", new_file_location, '"')
+        log.error("New test file location is invalid - not creating '",
+                  new_file_location, '"')
     end
 end
 
