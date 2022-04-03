@@ -15,6 +15,22 @@ local log = require('plenary.log').new({
 
 local M = {}
 
+function reverse(t)
+    local reversedTable = {}
+    local itemCount = #t
+    for k, v in ipairs(t) do reversedTable[itemCount + 1 - k] = v end
+    return reversedTable
+end
+
+function splitStr(inputstr, sep)
+    if sep == nil then sep = "%s" end
+    local t = {}
+    for str in string.gmatch(inputstr, "([^" .. sep .. "]+)") do
+        table.insert(t, str)
+    end
+    return t
+end
+
 local function get_full_file_path_of_current_buffer() return
     vim.fn.expand('%:p') end
 
@@ -116,15 +132,23 @@ local function generate_testfilepath_from_currentfilepath(currentfilepath)
 end
 
 local function touch_file_recursive(filepath)
+    local filepathBeforeAfterStaticJs = get_substring_before_and_after_match(
+                                            filepath, "/static/test/spec/")
+
+    local moduleName =
+        reverse(splitStr(filepathBeforeAfterStaticJs.before, "/"))[1]
+
+    local filePathWithoutTest = string.gsub(filepathBeforeAfterStaticJs.after,
+                                            "-test%.%a+", "");
+
     local dirname = get_dirname_of_filepath(filepath)
+
     mkdirp(dirname)
     touchFile(filepath)
     writeLineToFile(filepath, "//Auto generated from nvim-hubspot-js-utils")
     writeLineToFile(filepath, "")
-    writeLineToFile(filepath, "describe(\"" ..
-                        get_substring_before_and_after_match(filepath,
-                                                             "/static/test/spec/").after ..
-                        "\", () => {")
+    writeLineToFile(filepath, "describe(\"" .. moduleName .. "/" ..
+                        filePathWithoutTest .. "\", () => {")
     writeLineToFile(filepath, "//")
     writeLineToFile(filepath, "})")
 

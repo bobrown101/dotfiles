@@ -76,10 +76,15 @@ if isHubspotMachine then
     require("lspconfig").tsserver.setup({
         flags = {debounce_text_changes = 500},
         cmd = {
-            "typescript-language-server", "--log-level", "1", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
-            "--tsserver-log-verbosity", "off", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
+
+            "typescript-language-server", "--log-level", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
+            "4", "--tsserver-log-verbosity", "verbose", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
             "--tsserver-log-file", getTsserverLogPath(), "--tsserver-path",
             getTsserverPath(), "--stdio"
+            -- "typescript-language-server", "--log-level", "1", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
+            -- "--tsserver-log-verbosity", "off", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
+            -- "--tsserver-log-file", getTsserverLogPath(), "--tsserver-path",
+            -- getTsserverPath(), "--stdio"
         },
         on_attach = on_attach,
         root_dir = util.root_pattern(".git"),
