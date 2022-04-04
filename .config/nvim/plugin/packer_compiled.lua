@@ -74,10 +74,22 @@ _G.packer_plugins = {
     path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/Comment.nvim",
     url = "https://github.com/numToStr/Comment.nvim"
   },
+  ["FTerm.nvim"] = {
+    config = { "\27LJ\2\nË\2\0\0\6\0\16\0\0256\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\3\0005\3\4\0=\3\5\2B\0\2\0016\0\6\0009\0\a\0009\0\b\0'\2\t\0'\3\n\0'\4\v\0005\5\f\0B\0\5\0016\0\6\0009\0\a\0009\0\b\0'\2\r\0'\3\n\0'\4\14\0005\5\15\0B\0\5\1K\0\1\0\1\0\2\vsilent\2\fnoremap\0025<C-\\><C-n><CMD>lua require('FTERM').toggle()<CR>\6t\1\0\2\vsilent\2\fnoremap\2+<CMD>lua require('FTERM').toggle()<CR>\14<leader>t\6n\20nvim_set_keymap\bapi\bvim\16dimmensions\1\0\2\nwidth\4Õô≥Ê\fÃô≥ˇ\3\vheight\4Õô≥Ê\fÃô≥ˇ\3\1\0\1\vborder\vdouble\nsetup\nFTerm\frequire\0" },
+    loaded = true,
+    path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/FTerm.nvim",
+    url = "https://github.com/numToStr/FTerm.nvim"
+  },
   LuaSnip = {
     loaded = true,
     path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/LuaSnip",
     url = "https://github.com/L3MON4D3/LuaSnip"
+  },
+  ["alpha-nvim"] = {
+    config = { "\27LJ\2\n`\0\0\5\0\5\0\n6\0\0\0'\2\1\0B\0\2\0029\0\2\0006\2\0\0'\4\3\0B\2\2\0029\2\4\2B\0\2\1K\0\1\0\vconfig\26alpha.themes.startify\nsetup\nalpha\frequire\0" },
+    loaded = true,
+    path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/alpha-nvim",
+    url = "https://github.com/goolord/alpha-nvim"
   },
   ["cmp-buffer"] = {
     loaded = true,
@@ -109,12 +121,6 @@ _G.packer_plugins = {
     path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/galaxyline.nvim",
     url = "https://github.com/glepnir/galaxyline.nvim"
   },
-  ["git_blame.nvim"] = {
-    config = { "\27LJ\2\nä\1\0\0\6\0\a\0\t6\0\0\0009\0\1\0009\0\2\0'\2\3\0'\3\4\0'\4\5\0005\5\6\0B\0\5\1K\0\1\0\1\0\2\fnoremap\2\vsilent\2,<cmd>lua require('git_blame').run()<cr>\r<space>g\6n\20nvim_set_keymap\bapi\bvim\0" },
-    loaded = true,
-    path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/git_blame.nvim",
-    url = "https://github.com/bobrown101/git_blame.nvim"
-  },
   ["gitsigns.nvim"] = {
     config = { "\27LJ\2\n6\0\0\3\0\3\0\0066\0\0\0'\2\1\0B\0\2\0029\0\2\0B\0\1\1K\0\1\0\nsetup\rgitsigns\frequire\0" },
     loaded = true,
@@ -133,7 +139,7 @@ _G.packer_plugins = {
     url = "https://github.com/onsails/lspkind-nvim"
   },
   ["nnn.nvim"] = {
-    config = { "\27LJ\2\nb\0\0\4\0\6\0\t6\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\4\0005\3\3\0=\3\5\2B\0\2\1K\0\1\0\vpicker\1\0\0\1\0\1\bcmd\24EDITOR=nvim nnn -Pp\nsetup\bnnn\frequire\0" },
+    config = { "\27LJ\2\n‰\1\0\0\6\0\r\0\0176\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\4\0005\3\3\0=\3\5\2B\0\2\0016\0\6\0009\0\a\0009\0\b\0'\2\t\0'\3\n\0'\4\v\0005\5\f\0B\0\5\1K\0\1\0\1\0\2\vsilent\2\fnoremap\0026:lua require('nnn').toggle('picker', '%:p:h')<CR>\6-\6n\20nvim_set_keymap\bapi\bvim\vpicker\1\0\0\1\0\1\bcmd\24EDITOR=nvim nnn -Pp\nsetup\bnnn\frequire\0" },
     loaded = true,
     path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/nnn.nvim",
     url = "https://github.com/luukvbaal/nnn.nvim"
@@ -154,12 +160,6 @@ _G.packer_plugins = {
     path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/nvim-lspconfig",
     url = "https://github.com/neovim/nvim-lspconfig"
   },
-  ["nvim-toggleterm.lua"] = {
-    config = { "\27LJ\2\nπ\2\0\0\6\0\15\0\0256\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\3\0005\3\4\0=\3\5\2B\0\2\0016\0\6\0009\0\a\0009\0\b\0'\2\t\0'\3\n\0'\4\v\0005\5\f\0B\0\5\0016\0\6\0009\0\a\0009\0\b\0'\2\r\0'\3\n\0'\4\v\0005\5\14\0B\0\5\1K\0\1\0\1\0\2\fnoremap\2\vsilent\2\6t\1\0\2\fnoremap\2\vsilent\2\26<cmd>:ToggleTerm <CR>\14<leader>q\6n\20nvim_set_keymap\bapi\bvim\15float_opts\1\0\1\vborder\vdouble\1\0\3\20shade_terminals\2\19shading_factor\0061\14direction\nfloat\nsetup\15toggleterm\frequire\0" },
-    loaded = true,
-    path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/nvim-toggleterm.lua",
-    url = "https://github.com/akinsho/nvim-toggleterm.lua"
-  },
   ["nvim-treesitter"] = {
     loaded = true,
     path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/nvim-treesitter",
@@ -176,12 +176,6 @@ _G.packer_plugins = {
     path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/nvim-web-devicons",
     url = "https://github.com/kyazdani42/nvim-web-devicons"
   },
-  nvim_cmp_hs_translation_source = {
-    config = { "\27LJ\2\nL\0\0\3\0\3\0\0066\0\0\0'\2\1\0B\0\2\0029\0\2\0B\0\1\1K\0\1\0\nsetup#nvim_cmp_hs_translation_source\frequire\0" },
-    loaded = true,
-    path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/nvim_cmp_hs_translation_source",
-    url = "https://github.com/bobrown101/nvim_cmp_hs_translation_source"
-  },
   ["packer.nvim"] = {
     loaded = true,
     path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/packer.nvim",
@@ -192,19 +186,8 @@ _G.packer_plugins = {
     path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/plenary.nvim",
     url = "https://github.com/nvim-lua/plenary.nvim"
   },
-  ["popup.nvim"] = {
-    loaded = true,
-    path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/popup.nvim",
-    url = "https://github.com/nvim-lua/popup.nvim"
-  },
-  ["telescope-file-browser.nvim"] = {
-    config = { "\27LJ\2\nQ\0\0\3\0\4\0\a6\0\0\0'\2\1\0B\0\2\0029\0\2\0'\2\3\0B\0\2\1K\0\1\0\17file_browser\19load_extension\14telescope\frequire\0" },
-    loaded = true,
-    path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/telescope-file-browser.nvim",
-    url = "https://github.com/nvim-telescope/telescope-file-browser.nvim"
-  },
   ["telescope.nvim"] = {
-    config = { "\27LJ\2\nü\5\0\0\6\0\25\00076\0\0\0'\2\1\0B\0\2\0029\0\2\0004\2\0\0B\0\2\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\a\0'\4\b\0005\5\t\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\n\0'\4\v\0005\5\f\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\r\0'\4\14\0005\5\15\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\16\0'\4\17\0005\5\18\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\19\0'\4\20\0005\5\21\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\22\0'\4\23\0005\5\24\0B\0\5\1K\0\1\0\1\0\2\fnoremap\2\vsilent\2\21<cmd>:vsplit<CR>\14<space>sv\1\0\2\fnoremap\2\vsilent\2\20<cmd>:split<CR>\14<space>sh\1\0\2\fnoremap\2\vsilent\2-<cmd>lua vim.diagnostic.open_float()<cr>\r<space>d\1\0\2\fnoremap\2\vsilent\0026<cmd>lua require('tools').telescope_buffers()<cr>\n<tab>\1\0\2\fnoremap\2\vsilent\0023<cmd>lua require('tools').telescope_grep()<cr>\14<space>ss\1\0\2\fnoremap\2\vsilent\0024<cmd>lua require('tools').telescope_files()<cr>\14<space>ff\6n\20nvim_set_keymap\bapi\bvim\nsetup\14telescope\frequire\0" },
+    config = { "\27LJ\2\n§\a\0\0\6\0\27\0?6\0\0\0'\2\1\0B\0\2\0029\0\2\0004\2\0\0B\0\2\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\a\0'\4\b\0005\5\t\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\n\0'\4\v\0005\5\f\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\r\0'\4\14\0005\5\15\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\a\0'\4\16\0005\5\17\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\18\0'\4\19\0005\5\20\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\21\0'\4\22\0005\5\23\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\24\0'\4\25\0005\5\26\0B\0\5\1K\0\1\0\1\0\2\vsilent\2\fnoremap\2\21<cmd>:vsplit<CR>\14<space>sv\1\0\2\vsilent\2\fnoremap\2\20<cmd>:split<CR>\14<space>sh\1\0\2\vsilent\2\fnoremap\2-<cmd>lua vim.diagnostic.open_float()<cr>\r<space>d\1\0\2\vsilent\2\fnoremap\2•\1<cmd>lua require('telescope.builtin').buffers(require('telescope.themes').get_dropdown({sort_lastused = true, layout_config = {height = 0.3, width = 0.9}}))<cr>\1\0\2\vsilent\2\fnoremap\0023<cmd>lua require('tools').telescope_grep()<cr>\14<space>ss\1\0\2\vsilent\2\fnoremap\0024<cmd>lua require('tools').telescope_files()<cr>\14<space>ff\1\0\2\vsilent\2\fnoremap\2e<cmd> lua require'telescope.builtin'.buffers(require('telescope.themes').get_dropdown({ })) <CR>\n<tab>\6n\20nvim_set_keymap\bapi\bvim\nsetup\14telescope\frequire\0" },
     loaded = true,
     path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/telescope.nvim",
     url = "https://github.com/nvim-telescope/telescope.nvim"
@@ -219,59 +202,46 @@ _G.packer_plugins = {
     loaded = true,
     path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/tokyonight.nvim",
     url = "https://github.com/folke/tokyonight.nvim"
-  },
-  ["vim-startify"] = {
-    loaded = true,
-    path = "/Users/brbrown/.local/share/nvim/site/pack/packer/start/vim-startify",
-    url = "https://github.com/mhinz/vim-startify"
   }
 }
 
 time([[Defining packer_plugins]], false)
--- Config for: nvim-ts-context-commentstring
-time([[Config for nvim-ts-context-commentstring]], true)
-try_loadstring("\27LJ\2\nÖ\1\0\0\4\0\6\0\t6\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\4\0005\3\3\0=\3\5\2B\0\2\1K\0\1\0\26context_commentstring\1\0\0\1\0\2\19enable_autocmd\1\venable\2\nsetup\28nvim-treesitter.configs\frequire\0", "config", "nvim-ts-context-commentstring")
-time([[Config for nvim-ts-context-commentstring]], false)
+-- Config for: alpha-nvim
+time([[Config for alpha-nvim]], true)
+try_loadstring("\27LJ\2\n`\0\0\5\0\5\0\n6\0\0\0'\2\1\0B\0\2\0029\0\2\0006\2\0\0'\4\3\0B\2\2\0029\2\4\2B\0\2\1K\0\1\0\vconfig\26alpha.themes.startify\nsetup\nalpha\frequire\0", "config", "alpha-nvim")
+time([[Config for alpha-nvim]], false)
 -- Config for: null-ls.nvim
 time([[Config for null-ls.nvim]], true)
 try_loadstring("\27LJ\2\n¥\1\0\0\a\0\n\0\0236\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\b\0004\3\3\0006\4\0\0'\6\1\0B\4\2\0029\4\3\0049\4\4\0049\4\5\4>\4\1\0036\4\0\0'\6\1\0B\4\2\0029\4\3\0049\4\6\0049\4\a\4>\4\2\3=\3\t\2B\0\2\1K\0\1\0\fsources\1\0\0\vstylua\15formatting\reslint_d\16diagnostics\rbuiltins\nsetup\fnull-ls\frequire\0", "config", "null-ls.nvim")
 time([[Config for null-ls.nvim]], false)
--- Config for: nvim_cmp_hs_translation_source
-time([[Config for nvim_cmp_hs_translation_source]], true)
-try_loadstring("\27LJ\2\nL\0\0\3\0\3\0\0066\0\0\0'\2\1\0B\0\2\0029\0\2\0B\0\1\1K\0\1\0\nsetup#nvim_cmp_hs_translation_source\frequire\0", "config", "nvim_cmp_hs_translation_source")
-time([[Config for nvim_cmp_hs_translation_source]], false)
--- Config for: telescope.nvim
-time([[Config for telescope.nvim]], true)
-try_loadstring("\27LJ\2\nü\5\0\0\6\0\25\00076\0\0\0'\2\1\0B\0\2\0029\0\2\0004\2\0\0B\0\2\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\a\0'\4\b\0005\5\t\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\n\0'\4\v\0005\5\f\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\r\0'\4\14\0005\5\15\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\16\0'\4\17\0005\5\18\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\19\0'\4\20\0005\5\21\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\22\0'\4\23\0005\5\24\0B\0\5\1K\0\1\0\1\0\2\fnoremap\2\vsilent\2\21<cmd>:vsplit<CR>\14<space>sv\1\0\2\fnoremap\2\vsilent\2\20<cmd>:split<CR>\14<space>sh\1\0\2\fnoremap\2\vsilent\2-<cmd>lua vim.diagnostic.open_float()<cr>\r<space>d\1\0\2\fnoremap\2\vsilent\0026<cmd>lua require('tools').telescope_buffers()<cr>\n<tab>\1\0\2\fnoremap\2\vsilent\0023<cmd>lua require('tools').telescope_grep()<cr>\14<space>ss\1\0\2\fnoremap\2\vsilent\0024<cmd>lua require('tools').telescope_files()<cr>\14<space>ff\6n\20nvim_set_keymap\bapi\bvim\nsetup\14telescope\frequire\0", "config", "telescope.nvim")
-time([[Config for telescope.nvim]], false)
--- Config for: indent-blankline.nvim
-time([[Config for indent-blankline.nvim]], true)
-try_loadstring("\27LJ\2\nÅ\1\0\0\4\0\b\0\0146\0\0\0009\0\1\0009\0\2\0\18\2\0\0009\0\3\0'\3\4\0B\0\3\0016\0\5\0'\2\6\0B\0\2\0029\0\a\0004\2\0\0B\0\2\1K\0\1\0\nsetup\21indent_blankline\frequire\14space:‚ãÖ\vappend\14listchars\bopt\bvim\0", "config", "indent-blankline.nvim")
-time([[Config for indent-blankline.nvim]], false)
--- Config for: todo-comments.nvim
-time([[Config for todo-comments.nvim]], true)
-try_loadstring("\27LJ\2\n?\0\0\3\0\3\0\a6\0\0\0'\2\1\0B\0\2\0029\0\2\0004\2\0\0B\0\2\1K\0\1\0\nsetup\18todo-comments\frequire\0", "config", "todo-comments.nvim")
-time([[Config for todo-comments.nvim]], false)
--- Config for: nvim-toggleterm.lua
-time([[Config for nvim-toggleterm.lua]], true)
-try_loadstring("\27LJ\2\nπ\2\0\0\6\0\15\0\0256\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\3\0005\3\4\0=\3\5\2B\0\2\0016\0\6\0009\0\a\0009\0\b\0'\2\t\0'\3\n\0'\4\v\0005\5\f\0B\0\5\0016\0\6\0009\0\a\0009\0\b\0'\2\r\0'\3\n\0'\4\v\0005\5\14\0B\0\5\1K\0\1\0\1\0\2\fnoremap\2\vsilent\2\6t\1\0\2\fnoremap\2\vsilent\2\26<cmd>:ToggleTerm <CR>\14<leader>q\6n\20nvim_set_keymap\bapi\bvim\15float_opts\1\0\1\vborder\vdouble\1\0\3\20shade_terminals\2\19shading_factor\0061\14direction\nfloat\nsetup\15toggleterm\frequire\0", "config", "nvim-toggleterm.lua")
-time([[Config for nvim-toggleterm.lua]], false)
--- Config for: telescope-file-browser.nvim
-time([[Config for telescope-file-browser.nvim]], true)
-try_loadstring("\27LJ\2\nQ\0\0\3\0\4\0\a6\0\0\0'\2\1\0B\0\2\0029\0\2\0'\2\3\0B\0\2\1K\0\1\0\17file_browser\19load_extension\14telescope\frequire\0", "config", "telescope-file-browser.nvim")
-time([[Config for telescope-file-browser.nvim]], false)
--- Config for: nnn.nvim
-time([[Config for nnn.nvim]], true)
-try_loadstring("\27LJ\2\nb\0\0\4\0\6\0\t6\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\4\0005\3\3\0=\3\5\2B\0\2\1K\0\1\0\vpicker\1\0\0\1\0\1\bcmd\24EDITOR=nvim nnn -Pp\nsetup\bnnn\frequire\0", "config", "nnn.nvim")
-time([[Config for nnn.nvim]], false)
--- Config for: git_blame.nvim
-time([[Config for git_blame.nvim]], true)
-try_loadstring("\27LJ\2\nä\1\0\0\6\0\a\0\t6\0\0\0009\0\1\0009\0\2\0'\2\3\0'\3\4\0'\4\5\0005\5\6\0B\0\5\1K\0\1\0\1\0\2\fnoremap\2\vsilent\2,<cmd>lua require('git_blame').run()<cr>\r<space>g\6n\20nvim_set_keymap\bapi\bvim\0", "config", "git_blame.nvim")
-time([[Config for git_blame.nvim]], false)
 -- Config for: gitsigns.nvim
 time([[Config for gitsigns.nvim]], true)
 try_loadstring("\27LJ\2\n6\0\0\3\0\3\0\0066\0\0\0'\2\1\0B\0\2\0029\0\2\0B\0\1\1K\0\1\0\nsetup\rgitsigns\frequire\0", "config", "gitsigns.nvim")
 time([[Config for gitsigns.nvim]], false)
+-- Config for: telescope.nvim
+time([[Config for telescope.nvim]], true)
+try_loadstring("\27LJ\2\n§\a\0\0\6\0\27\0?6\0\0\0'\2\1\0B\0\2\0029\0\2\0004\2\0\0B\0\2\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\a\0'\4\b\0005\5\t\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\n\0'\4\v\0005\5\f\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\r\0'\4\14\0005\5\15\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\a\0'\4\16\0005\5\17\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\18\0'\4\19\0005\5\20\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\21\0'\4\22\0005\5\23\0B\0\5\0016\0\3\0009\0\4\0009\0\5\0'\2\6\0'\3\24\0'\4\25\0005\5\26\0B\0\5\1K\0\1\0\1\0\2\vsilent\2\fnoremap\2\21<cmd>:vsplit<CR>\14<space>sv\1\0\2\vsilent\2\fnoremap\2\20<cmd>:split<CR>\14<space>sh\1\0\2\vsilent\2\fnoremap\2-<cmd>lua vim.diagnostic.open_float()<cr>\r<space>d\1\0\2\vsilent\2\fnoremap\2•\1<cmd>lua require('telescope.builtin').buffers(require('telescope.themes').get_dropdown({sort_lastused = true, layout_config = {height = 0.3, width = 0.9}}))<cr>\1\0\2\vsilent\2\fnoremap\0023<cmd>lua require('tools').telescope_grep()<cr>\14<space>ss\1\0\2\vsilent\2\fnoremap\0024<cmd>lua require('tools').telescope_files()<cr>\14<space>ff\1\0\2\vsilent\2\fnoremap\2e<cmd> lua require'telescope.builtin'.buffers(require('telescope.themes').get_dropdown({ })) <CR>\n<tab>\6n\20nvim_set_keymap\bapi\bvim\nsetup\14telescope\frequire\0", "config", "telescope.nvim")
+time([[Config for telescope.nvim]], false)
+-- Config for: todo-comments.nvim
+time([[Config for todo-comments.nvim]], true)
+try_loadstring("\27LJ\2\n?\0\0\3\0\3\0\a6\0\0\0'\2\1\0B\0\2\0029\0\2\0004\2\0\0B\0\2\1K\0\1\0\nsetup\18todo-comments\frequire\0", "config", "todo-comments.nvim")
+time([[Config for todo-comments.nvim]], false)
+-- Config for: FTerm.nvim
+time([[Config for FTerm.nvim]], true)
+try_loadstring("\27LJ\2\nË\2\0\0\6\0\16\0\0256\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\3\0005\3\4\0=\3\5\2B\0\2\0016\0\6\0009\0\a\0009\0\b\0'\2\t\0'\3\n\0'\4\v\0005\5\f\0B\0\5\0016\0\6\0009\0\a\0009\0\b\0'\2\r\0'\3\n\0'\4\14\0005\5\15\0B\0\5\1K\0\1\0\1\0\2\vsilent\2\fnoremap\0025<C-\\><C-n><CMD>lua require('FTERM').toggle()<CR>\6t\1\0\2\vsilent\2\fnoremap\2+<CMD>lua require('FTERM').toggle()<CR>\14<leader>t\6n\20nvim_set_keymap\bapi\bvim\16dimmensions\1\0\2\nwidth\4Õô≥Ê\fÃô≥ˇ\3\vheight\4Õô≥Ê\fÃô≥ˇ\3\1\0\1\vborder\vdouble\nsetup\nFTerm\frequire\0", "config", "FTerm.nvim")
+time([[Config for FTerm.nvim]], false)
+-- Config for: nvim-ts-context-commentstring
+time([[Config for nvim-ts-context-commentstring]], true)
+try_loadstring("\27LJ\2\nÖ\1\0\0\4\0\6\0\t6\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\4\0005\3\3\0=\3\5\2B\0\2\1K\0\1\0\26context_commentstring\1\0\0\1\0\2\19enable_autocmd\1\venable\2\nsetup\28nvim-treesitter.configs\frequire\0", "config", "nvim-ts-context-commentstring")
+time([[Config for nvim-ts-context-commentstring]], false)
+-- Config for: nnn.nvim
+time([[Config for nnn.nvim]], true)
+try_loadstring("\27LJ\2\n‰\1\0\0\6\0\r\0\0176\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\4\0005\3\3\0=\3\5\2B\0\2\0016\0\6\0009\0\a\0009\0\b\0'\2\t\0'\3\n\0'\4\v\0005\5\f\0B\0\5\1K\0\1\0\1\0\2\vsilent\2\fnoremap\0026:lua require('nnn').toggle('picker', '%:p:h')<CR>\6-\6n\20nvim_set_keymap\bapi\bvim\vpicker\1\0\0\1\0\1\bcmd\24EDITOR=nvim nnn -Pp\nsetup\bnnn\frequire\0", "config", "nnn.nvim")
+time([[Config for nnn.nvim]], false)
+-- Config for: indent-blankline.nvim
+time([[Config for indent-blankline.nvim]], true)
+try_loadstring("\27LJ\2\nÅ\1\0\0\4\0\b\0\0146\0\0\0009\0\1\0009\0\2\0\18\2\0\0009\0\3\0'\3\4\0B\0\3\0016\0\5\0'\2\6\0B\0\2\0029\0\a\0004\2\0\0B\0\2\1K\0\1\0\nsetup\21indent_blankline\frequire\14space:‚ãÖ\vappend\14listchars\bopt\bvim\0", "config", "indent-blankline.nvim")
+time([[Config for indent-blankline.nvim]], false)
 if should_profile then save_profiles() end
 
 end)

@@ -1,4 +1,7 @@
 vim.g.mapleader = ' '
+vim.g.noesckeys = true
+vim.g.updatetime = 200
+vim.g.noswapfile = true
 vim.o.termguicolors = true
 vim.opt.list = true
 vim.opt.listchars = {space = '·'}
@@ -27,21 +30,9 @@ vim.o.cursorline = true
 vim.o.background = 'light'
 vim.g.nobackup = true
 vim.g.nowritebackup = true
-vim.o.updatetime = 200
 vim.o.timeoutlen = 500
+vim.o.ttimeoutlen = 50
 vim.o.clipboard = 'unnamedplus'
-
--- vim.api.nvim_set_keymap("n", "<tab>",
--- ":if &modifiable && !&readonly && &modified <CR> :write<CR> :endif<CR>:bnext<CR>",
--- {noremap = true, silent = true})
-
--- vim.api.nvim_set_keymap("n", "<s-tab>",
--- ":if &modifiable && !&readonly && &modified <CR> :write<CR> :endif<CR>:bprevious<CR>",
--- {noremap = true, silent = true})
-
--- vim.api.nvim_set_keymap("n", "<tab>",
---                         "<cmd> lua require'telescope.builtin'.buffers(require('telescope.themes').get_dropdown({ })) <CR>",
---                         {noremap = true, silent = true})
 
 -- " Use leader and hjkl to navigate windows
 vim.api.nvim_set_keymap("n", "<leader>h", "<cmd> wincmd h <CR>",
@@ -60,15 +51,11 @@ vim.api.nvim_set_keymap("n", "<Left>", "<nop>", {noremap = true, silent = true})
 vim.api
     .nvim_set_keymap("n", "<Right>", "<nop>", {noremap = true, silent = true})
 
-vim.api.nvim_set_keymap("n", "_",
+vim.api.nvim_set_keymap("n", "<leader>_",
                         "<cmd> lua vim.api.nvim_win_set_width(vim.api.nvim_get_current_win(), vim.api.nvim_win_get_width(vim.api.nvim_get_current_win()) - 5)<CR>",
                         {noremap = true, silent = true})
 
-vim.api.nvim_set_keymap("n", "+",
+vim.api.nvim_set_keymap("n", "<leader>+",
                         "<cmd> lua vim.api.nvim_win_set_width(vim.api.nvim_get_current_win(), vim.api.nvim_win_get_width(vim.api.nvim_get_current_win()) + 5)<CR>",
                         {noremap = true, silent = true})
 
--- vim.api.nvim_set_keymap("n", "-", ":lua require('tools').FileExplorer()<CR>", {noremap = true, silent = true})
-vim.api.nvim_set_keymap("n", "-",
-                        ":lua require('nnn').toggle('picker', '%:p:h')<CR>", -- the second arg is to represent "open in the current directory"
-                        {noremap = true, silent = true})
