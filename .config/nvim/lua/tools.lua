@@ -33,38 +33,6 @@ function M.telescope_grep()
     require("telescope.builtin").live_grep({cwd = root})
 end
 
-function M.telescope_buffers()
-    require('telescope.builtin').buffers(require('telescope.themes').get_dropdown({initial_mode = "normal", layout_config = {width = 0.8}}))
-end
-
-function M.telescope_diagnostics(opts)
-    opts = {}
-    local utils = require "telescope.utils"
-    local pickers = require "telescope.pickers"
-    local locations = utils.diagnostics_to_tbl(opts)
-
-    if vim.tbl_isempty(locations) then
-        print "No diagnostics found"
-        return
-    end
-
-    opts.path_display = utils.get_default(opts.path_display, "hidden")
-    pickers.new(opts, {
-        prompt_title = "LSP Document Diagnostics",
-        finder = require('telescope.finders').new_table {
-            results = locations,
-            entry_maker = opts.entry_maker or
-                require("telescope.make_entry").gen_from_lsp_diagnostics(opts)
-        },
-        previewer = require('telescope.previewers').new_termopen_previewer({
-            get_command = function(entry, status)
-                return {'echo', entry.text}
-            end
-        })
-    }):find()
-
-end
-
 -- Asumes filepath is a file.
 local function dirname(filepath)
     local is_changed = false
@@ -106,14 +74,5 @@ function M.is_dir(filename)
 end
 
 function M.open_file(file) vim.cmd("e " .. file) end
-
-function M.FileExplorer()
-    if M.FileExplorerHasAlreadyBeenOpened == true then
-        vim.cmd("Rex")
-    else
-        vim.cmd("Ex")
-        M.FileExplorerHasAlreadyBeenOpened = true;
-    end
-end
 
 return M

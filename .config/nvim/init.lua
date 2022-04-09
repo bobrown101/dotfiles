@@ -36,7 +36,20 @@ require("packer").startup(function()
 
     use("folke/tokyonight.nvim")
 
-    use({"nvim-treesitter/nvim-treesitter"})
+    use({
+        "nvim-treesitter/nvim-treesitter",
+        config = function()
+
+            local treesitter = require('nvim-treesitter.configs')
+
+            treesitter.setup({
+                ensure_installed = "all",
+                ignore_install = {"haskell"},
+                highlight = {enable = true},
+                context_commentstring = {enable = true}
+            })
+        end
+    })
     use({"neovim/nvim-lspconfig"})
 
     use({"onsails/lspkind-nvim"})
@@ -85,9 +98,11 @@ require("packer").startup(function()
             vim.api.nvim_set_keymap("n", "<tab>",
                                     "<cmd> lua require'telescope.builtin'.buffers(require('telescope.themes').get_dropdown({ })) <CR>",
                                     {noremap = true, silent = true})
+
             vim.api.nvim_set_keymap("n", "<space>ff",
                                     "<cmd>lua require('tools').telescope_files()<cr>",
                                     {noremap = true, silent = true})
+
             vim.api.nvim_set_keymap("n", "<space>ss",
                                     "<cmd>lua require('tools').telescope_grep()<cr>",
                                     {noremap = true, silent = true})
@@ -95,11 +110,14 @@ require("packer").startup(function()
             vim.api.nvim_set_keymap("n", "<tab>",
                                     "<cmd>lua require('telescope.builtin').buffers(require('telescope.themes').get_dropdown({sort_lastused = true, layout_config = {height = 0.3, width = 0.9}}))<cr>",
                                     {noremap = true, silent = true})
+
             vim.api.nvim_set_keymap("n", "<space>d",
                                     "<cmd>lua vim.diagnostic.open_float()<cr>",
                                     {noremap = true, silent = true})
+
             vim.api.nvim_set_keymap("n", "<space>sh", "<cmd>:split<CR>",
                                     {noremap = true, silent = true})
+
             vim.api.nvim_set_keymap("n", "<space>sv", "<cmd>:vsplit<CR>",
                                     {noremap = true, silent = true})
         end
@@ -166,5 +184,4 @@ require("hubspot-js-utils")
 require("comment-nvim-config")
 require("cmp-config")
 require("bubbles-line")
-require("treesitter-config")
 require("formatter-config")
