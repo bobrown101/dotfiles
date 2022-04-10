@@ -27,7 +27,6 @@ vim.o.autoindent = true
 vim.o.number = true
 vim.o.relativenumber = true
 vim.o.cursorline = true
-vim.o.background = 'light'
 vim.g.nobackup = true
 vim.g.nowritebackup = true
 vim.o.timeoutlen = 500
@@ -59,3 +58,24 @@ vim.api.nvim_set_keymap("n", "<leader>+",
                         "<cmd> lua vim.api.nvim_win_set_width(vim.api.nvim_get_current_win(), vim.api.nvim_win_get_width(vim.api.nvim_get_current_win()) + 5)<CR>",
                         {noremap = true, silent = true})
 
+-- disable unused builtin plugins
+vim.g.loaded_gzip = 1
+vim.g.loaded_zip = 1
+vim.g.loaded_zipPlugin = 1
+vim.g.loaded_tar = 1
+vim.g.loaded_tarPlugin = 1
+
+vim.g.loaded_getscript = 1
+vim.g.loaded_getscriptPlugin = 1
+vim.g.loaded_vimball = 1
+vim.g.loaded_vimballPlugin = 1
+vim.g.loaded_2html_plugin = 1
+
+vim.g.loaded_matchit = 1
+vim.g.loaded_matchparen = 1
+vim.g.loaded_logiPat = 1
+vim.g.loaded_rrhelper = 1
+
+vim.g.loaded_netrw = 1
+vim.g.loaded_netrwPlugin = 1
+vim.g.loaded_netrwSettings = 1

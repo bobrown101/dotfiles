@@ -80,8 +80,53 @@ require("packer").startup(function()
 
     use({"hrsh7th/nvim-cmp"})
 
-    use({"glepnir/galaxyline.nvim"})
+    -- use({"glepnir/galaxyline.nvim"})
+
     use({"kyazdani42/nvim-web-devicons"})
+
+    use {
+        "nvim-lualine/lualine.nvim",
+        requires = {"kyazdani42/nvim-web-devicons", opt = true},
+        config = function()
+            local function fileLocationRelativeToGitRoot()
+                return vim.fn.expand('%:~:.')
+            end
+            require('lualine').setup {
+                options = {
+                    theme = 'onelight',
+                    component_separators = '|',
+                    section_separators = {left = '', right = ''}
+                },
+                sections = {
+                    lualine_a = {
+                        {'mode', separator = {left = ''}, right_padding = 2}
+                    },
+                    lualine_b = {'filename', 'branch'},
+                    lualine_c = {fileLocationRelativeToGitRoot},
+
+                    lualine_x = {},
+                    lualine_y = {'filetype', 'diff', 'progress'},
+                    lualine_z = {
+                        {
+                            'location',
+                            separator = {right = ''},
+                            left_padding = 2
+                        }
+                    }
+                },
+                inactive_sections = {
+                    lualine_a = {'filename'},
+                    lualine_b = {},
+                    lualine_c = {},
+                    lualine_x = {},
+                    lualine_y = {},
+                    lualine_z = {'location'}
+                },
+                tabline = {},
+                extensions = {}
+            }
+        end
+    }
 
     use({
         "numToStr/Comment.nvim",
@@ -221,5 +266,5 @@ require("settings")
 require("theme")
 require("lsp")
 require("cmp-config")
-require("bubbles-line")
+-- require("bubbles-line")
 require("formatter-config")
