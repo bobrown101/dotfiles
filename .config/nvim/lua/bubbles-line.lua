@@ -58,8 +58,6 @@ local mode_map = {
     ['!'] = {" ! ", colors.crimsonRed}
 }
 
-----------------------------=== Funcs ===--------------------------
-
 local function mode_label() return mode_map[vim.fn.mode()][1] or 'N/A' end
 local function mode_hl() return mode_map[vim.fn.mode()][2] or colors.main end
 
@@ -74,10 +72,6 @@ local function highlight2(group, bg, fg, gui)
     if gui ~= nil then cmd = cmd .. ' gui=' .. gui end
     vim.cmd(cmd)
 end
-
-----------------------------=== Components ===--------------------------
-
-----------------------------=== Left ===--------------------------
 
 gls.left[1] = {
     leftRounded = {
@@ -174,27 +168,12 @@ gls.left[10] = {
     }
 }
 
--- gls.left[11] = {
---     DiagnosticError = {
---         provider = "DiagnosticError",
---         icon = "   ",
---         highlight = {colors.red, colors.bg}
---     }
-
 gls.left[12] = {
     Space = {
         provider = function() return " " end,
         highlight = {colors.bg, colors.bg}
     }
 }
-
--- gls.left[13] = {
---     DiagnosticWarn = {
---         provider = "DiagnosticWarn",
---         icon = "   ",
---         highlight = {colors.green, colors.bg}
---     }
--- }
 
 gls.left[14] = {
     Space = {
@@ -203,47 +182,12 @@ gls.left[14] = {
     }
 }
 
--- gls.left[15] = {
---     DiagnosticInfo = {
---         provider = "DiagnosticInfo",
---         icon = "   ",
---         highlight = {colors.blue, colors.bg}
---     }
--- }
-
 gls.left[16] = {
     Space = {
         provider = function() return " " end,
         highlight = {colors.bg, colors.bg}
     }
 }
-
--- gls.left[17] = {
---     DiagnosticHint = {
---         provider = "DiagnosticHint",
---         icon = "   ",
---         highlight = {colors.blue, colors.bg}
---     }
--- }
-
-----------------------------=== Middle ===--------------------------
--- gls.mid[1] = {
--- 	ShowLspClient = {
--- 		provider = 'GetLspClient',
--- 		condition = function ()
--- 			local tbl = {['dashboard'] = true,['']=true}
-
--- 			if tbl[vim.bo.filetype] then
--- 				return false
--- 			end
--- 			return true
--- 		end,
--- 		icon = ' LSP:',
--- 		highlight = {colors.white,colors.bg,'bold'}
--- 	}
--- }
-
-----------------------------=== Right ===--------------------------
 
 gls.right[1] = {
     GitIcon = {

@@ -16,6 +16,21 @@ vim.opt.shell = "/bin/zsh"
 require("packer").startup(function()
 
     use({"wbthomason/packer.nvim"})
+
+    use({"bobrown101/plugin-utils.nvim"})
+
+    use({
+        "bobrown101/asset-bender.nvim",
+        requires = {"bobrown101/plugin-utils.nvim"},
+        config = function() require("asset-bender").setup({}) end
+    })
+
+    use({
+        "bobrown101/hubspot-js-utils.nvim",
+        requires = {"bobrown101/plugin-utils.nvim"},
+        config = function() require("hubspot-js-utils").setup({}) end
+    })
+
     -- use({
     --     "bobrown101/git_blame.nvim",
     --     config = function()
@@ -68,7 +83,33 @@ require("packer").startup(function()
     use({"glepnir/galaxyline.nvim"})
     use({"kyazdani42/nvim-web-devicons"})
 
-    use({"numToStr/Comment.nvim"})
+    use({
+        "numToStr/Comment.nvim",
+        config = function()
+            require('Comment').setup {
+                pre_hook = function(ctx)
+                    local U = require 'Comment.utils'
+
+                    local location = nil
+                    if ctx.ctype == U.ctype.block then
+                        location =
+                            require('ts_context_commentstring.utils').get_cursor_location()
+                    elseif ctx.cmotion == U.cmotion.v or ctx.cmotion ==
+                        U.cmotion.V then
+                        location =
+                            require('ts_context_commentstring.utils').get_visual_start_location()
+                    end
+
+                    return
+                        require('ts_context_commentstring.internal').calculate_commentstring {
+                            key = ctx.ctype == U.ctype.line and '__default' or
+                                '__multiline',
+                            location = location
+                        }
+                end
+            }
+        end
+    })
 
     use({
         "JoosepAlviste/nvim-ts-context-commentstring",
@@ -134,11 +175,11 @@ require("packer").startup(function()
                 dimmensions = {height = 0.9, width = 0.9}
             })
 
-            vim.api.nvim_set_keymap("n", "<leader>t",
+            vim.api.nvim_set_keymap("n", "<leader>1",
                                     "<CMD>lua require('FTERM').toggle()<CR>",
                                     {noremap = true, silent = true})
 
-            vim.api.nvim_set_keymap("t", "<leader>t",
+            vim.api.nvim_set_keymap("t", "<leader>1",
                                     "<C-\\><C-n><CMD>lua require('FTERM').toggle()<CR>",
                                     {noremap = true, silent = true})
         end
@@ -179,8 +220,6 @@ end)
 require("settings")
 require("theme")
 require("lsp")
-require("asset-bender")
-require("hubspot-js-utils")
 require("comment-nvim-config")
 require("cmp-config")
 require("bubbles-line")
