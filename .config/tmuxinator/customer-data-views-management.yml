@@ -1,7 +1,7 @@
-# /Users/brbrown/.config/tmuxinator/crm-index-ui.yml
+# /Users/brbrown/.config/tmuxinator/customer-data-bulk-actions.yml
 
-name: crm-index-ui
-root: ~/Developer/crm-index-ui
+name: customer-data-views-management
+root: ~/Developer/customer-data-views-management
 
 # Optional tmux socket
 # socket_name: foo
@@ -45,5 +45,5 @@ root: ~/Developer/crm-index-ui
 # attach: false
 
 windows:
-  - editor: v
-  - bender: bend yarn && NODE_ARGS=--max_old_space_size=16384  bend reactor serve ./crm-index-ui  --ts-watch --update
+  - editor: v .
+  - bender: bend yarn && bend start

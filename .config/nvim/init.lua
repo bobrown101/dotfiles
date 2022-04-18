@@ -18,6 +18,79 @@ require("packer").startup(function()
     use({"wbthomason/packer.nvim"})
 
     use({"bobrown101/plugin-utils.nvim"})
+    use({
+        "folke/which-key.nvim",
+        config = function()
+            local wk = require("which-key")
+            wk.setup({})
+            wk.register({
+                d = {
+                    name = "Diagnostics",
+                    d = {
+                        function()
+                            print('hello from which-key')
+                            vim.diagnostic.open_float()
+                        end, "Open diagnostic float"
+                    }
+                },
+                f = {
+                    name = "file", -- optional group name
+                    f = {
+                        function()
+                            print("hello from which-key")
+                            require('tools').telescope_files()
+                        end, "Find File"
+                    }
+                },
+                s = {
+                    name = "Search",
+                    s = {
+                        function()
+                            require('tools').telescope_grep()
+                        end, "Search String"
+                    },
+                    h = {function() vim.cmd("split") end, "Split Horizontal"},
+                    v = {function() vim.cmd("vsplit") end, "Split Vertical"}
+                },
+                g = {
+                    b = {function()
+                        require('git_blame').run()
+                    end, "Git Blame"}
+                }
+            }, {prefix = "<leader>"})
+
+            wk.register({
+                ["-"] = {
+                    function()
+                        require('nnn').toggle('picker', '%:p:h') -- the second arg is to represent "open in the current directory"
+                    end, "toggle floating terminal"
+                },
+                ["<tab>"] = {
+                    function()
+                        require('telescope.builtin').buffers( --
+                        require('telescope.themes').get_dropdown({
+                            sort_lastused = true,
+                            layout_config = {height = 0.3, width = 0.9}
+                        }))
+                    end, "toggle floating terminal"
+                }
+            }, {mode = "n"})
+
+            local terminalMap = {
+                ["1"] = {
+                    function() require('FTERM').toggle() end,
+                    "Toggle Floating Terminal"
+                }
+            }
+            wk.register(terminalMap, {prefix = "<leader>1", mode = "n"})
+            wk.register({
+                ["<esc>"] = {
+                    function() require('FTERM').toggle() end,
+                    "Toggle Floating Terminal"
+                }
+            }, {prefix = "", mode = "t"})
+        end
+    })
 
     use({
         "bobrown101/asset-bender.nvim",
@@ -31,14 +104,7 @@ require("packer").startup(function()
         config = function() require("hubspot-js-utils").setup({}) end
     })
 
-    -- use({
-    --     "bobrown101/git_blame.nvim",
-    --     config = function()
-    --         vim.api.nvim_set_keymap("n", "<space>g",
-    --                                 "<cmd>lua require('git_blame').run()<cr>",
-    --                                 {noremap = true, silent = true})
-    --     end
-    -- })
+    use({"bobrown101/git_blame.nvim"})
 
     use({
         "lewis6991/gitsigns.nvim",
@@ -79,8 +145,6 @@ require("packer").startup(function()
     -- })
 
     use({"hrsh7th/nvim-cmp"})
-
-    -- use({"glepnir/galaxyline.nvim"})
 
     use({"kyazdani42/nvim-web-devicons"})
 
@@ -173,40 +237,11 @@ require("packer").startup(function()
     }
     use({"mhartington/formatter.nvim"})
 
-    -- use({"nvim-lua/popup.nvim"})
     use({"nvim-lua/plenary.nvim"})
 
     use({
         "nvim-telescope/telescope.nvim",
-        config = function()
-            require("telescope").setup({})
-
-            vim.api.nvim_set_keymap("n", "<tab>",
-                                    "<cmd> lua require'telescope.builtin'.buffers(require('telescope.themes').get_dropdown({ })) <CR>",
-                                    {noremap = true, silent = true})
-
-            vim.api.nvim_set_keymap("n", "<space>ff",
-                                    "<cmd>lua require('tools').telescope_files()<cr>",
-                                    {noremap = true, silent = true})
-
-            vim.api.nvim_set_keymap("n", "<space>ss",
-                                    "<cmd>lua require('tools').telescope_grep()<cr>",
-                                    {noremap = true, silent = true})
-
-            vim.api.nvim_set_keymap("n", "<tab>",
-                                    "<cmd>lua require('telescope.builtin').buffers(require('telescope.themes').get_dropdown({sort_lastused = true, layout_config = {height = 0.3, width = 0.9}}))<cr>",
-                                    {noremap = true, silent = true})
-
-            vim.api.nvim_set_keymap("n", "<space>d",
-                                    "<cmd>lua vim.diagnostic.open_float()<cr>",
-                                    {noremap = true, silent = true})
-
-            vim.api.nvim_set_keymap("n", "<space>sh", "<cmd>:split<CR>",
-                                    {noremap = true, silent = true})
-
-            vim.api.nvim_set_keymap("n", "<space>sv", "<cmd>:vsplit<CR>",
-                                    {noremap = true, silent = true})
-        end
+        config = function() require("telescope").setup({}) end
     })
     use({
         "folke/todo-comments.nvim",
@@ -219,14 +254,6 @@ require("packer").startup(function()
                 border = "double",
                 dimmensions = {height = 0.9, width = 0.9}
             })
-
-            vim.api.nvim_set_keymap("n", "<leader>1",
-                                    "<CMD>lua require('FTERM').toggle()<CR>",
-                                    {noremap = true, silent = true})
-
-            vim.api.nvim_set_keymap("t", "<leader>1",
-                                    "<C-\\><C-n><CMD>lua require('FTERM').toggle()<CR>",
-                                    {noremap = true, silent = true})
         end
     })
     use({
@@ -245,10 +272,6 @@ require("packer").startup(function()
         "luukvbaal/nnn.nvim",
         config = function()
             require("nnn").setup({picker = {cmd = "EDITOR=nvim nnn -Pp"}})
-
-            vim.api.nvim_set_keymap("n", "-",
-                                    ":lua require('nnn').toggle('picker', '%:p:h')<CR>", -- the second arg is to represent "open in the current directory"
-                                    {noremap = true, silent = true})
         end
     })
 
@@ -266,5 +289,4 @@ require("settings")
 require("theme")
 require("lsp")
 require("cmp-config")
--- require("bubbles-line")
 require("formatter-config")
