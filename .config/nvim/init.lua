@@ -11,13 +11,14 @@ if fn.empty(fn.glob(install_path)) > 0 then
     execute("packadd packer.nvim")
 end
 
-vim.opt.shell = "/bin/zsh"
-
 require("packer").startup(function()
 
     use({"wbthomason/packer.nvim"})
 
     use({"bobrown101/plugin-utils.nvim"})
+
+    use({"bobrown101/fff.nvim"})
+
     use({
         "folke/which-key.nvim",
         config = function()
@@ -28,7 +29,6 @@ require("packer").startup(function()
                     name = "Diagnostics",
                     d = {
                         function()
-                            print('hello from which-key')
                             vim.diagnostic.open_float()
                         end, "Open diagnostic float"
                     }
@@ -37,7 +37,6 @@ require("packer").startup(function()
                     name = "file", -- optional group name
                     f = {
                         function()
-                            print("hello from which-key")
                             require('tools').telescope_files()
                         end, "Find File"
                     }
@@ -60,10 +59,20 @@ require("packer").startup(function()
             }, {prefix = "<leader>"})
 
             wk.register({
+                ["_"] = {
+                    function()
+                        vim.cmd('term ')
+                        vim.cmd('startinsert')
+                        -- require("minimal-nnn").start()
+                    end, "NNN"
+                },
                 ["-"] = {
                     function()
-                        require('nnn').toggle('picker', '%:p:h') -- the second arg is to represent "open in the current directory"
-                    end, "toggle floating terminal"
+
+                        -- vim.cmd('term tt .. | cat')
+                        -- vim.cmd('startinsert')
+                        require("fff").start()
+                    end, "NNN"
                 },
                 ["<tab>"] = {
                     function()
@@ -75,20 +84,12 @@ require("packer").startup(function()
                     end, "toggle floating terminal"
                 }
             }, {mode = "n"})
-
-            local terminalMap = {
-                ["1"] = {
-                    function() require('FTERM').toggle() end,
-                    "Toggle Floating Terminal"
-                }
-            }
-            wk.register(terminalMap, {prefix = "<leader>1", mode = "n"})
             wk.register({
-                ["<esc>"] = {
-                    function() require('FTERM').toggle() end,
-                    "Toggle Floating Terminal"
+                ['<esc>'] = {
+                    function() vim.cmd('stopinsert') end,
+                    "Escape terminal insert mode"
                 }
-            }, {prefix = "", mode = "t"})
+            }, {mode = "t", prefix = "<esc>"})
         end
     })
 
@@ -137,12 +138,6 @@ require("packer").startup(function()
     use({"hrsh7th/cmp-nvim-lsp"})
     use({"hrsh7th/cmp-nvim-lua"})
     use({"hrsh7th/cmp-buffer"})
-    -- use({
-    --     "bobrown101/nvim_cmp_hs_translation_source",
-    --     config = function()
-    --         require("nvim_cmp_hs_translation_source").setup()
-    --     end
-    -- })
 
     use({"hrsh7th/nvim-cmp"})
 
@@ -248,15 +243,6 @@ require("packer").startup(function()
         config = function() require("todo-comments").setup({}) end
     })
     use({
-        "numToStr/FTerm.nvim",
-        config = function()
-            require("FTerm").setup({
-                border = "double",
-                dimmensions = {height = 0.9, width = 0.9}
-            })
-        end
-    })
-    use({
         "jose-elias-alvarez/null-ls.nvim",
         config = function()
             require("null-ls").setup({
@@ -265,13 +251,6 @@ require("packer").startup(function()
                     require("null-ls").builtins.formatting.stylua
                 }
             })
-        end
-    })
-
-    use({
-        "luukvbaal/nnn.nvim",
-        config = function()
-            require("nnn").setup({picker = {cmd = "EDITOR=nvim nnn -Pp"}})
         end
     })
 

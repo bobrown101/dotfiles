@@ -6,6 +6,7 @@ set PATH $HOME/.config/yarn/global/node_modules/.bin $PATH
 set PATH $HOME/.cargo/bin $PATH
 set PATH $HOME/Developer/alacritty/target/release $PATH
 
+set XDG_CACHE_HOME ~/.cache
 set EDITOR nvim
 
 set NODE_ARGS --max_old_space_size=8192
@@ -19,8 +20,16 @@ function ll
 	ls -al $argv
 end
 
+# function tt
+#   git ls-tree -r --name-only HEAD | tree -f --fromfile $argv
+# end
+
 function v
   nvim $argv
+end
+
+function mm
+ qmv --editor=nvim --format=destination-only -a $argv
 end
 
 function t
