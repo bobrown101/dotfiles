@@ -10,6 +10,8 @@ export PATH="$HOME/neovim/bin:$PATH"
 # See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
 ZSH_THEME="robbyrussell"
 
+export HS_TSSERVER_PATH="$(bpx --path hs-typescript)"
+
 # Set list of themes to pick from when loading at random
 # Setting this variable when ZSH_THEME=random will cause zsh to load
 # a theme from this variable instead of looking in $ZSH/themes/
@@ -106,12 +108,7 @@ alias v="nvim -V10$HOME/Desktop/neovim.log"
 alias t="tmuxinator"
 export NODE_ARGS='--max_old_space_size=8192'
 
-export EDITOR="nvim -V10$HOME/Desktop/neovim.log"
 
-
-function pretty() {
-  bpx hs-prettier --write $(git diff --name-only --cached)
-}
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
@@ -126,4 +123,3 @@ export PATH="/usr/local/sbin:$PATH"
 
 export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
 
-source /Users/brbrown/Library/Application Support/org.dystroy.broot/launcher/bash/br

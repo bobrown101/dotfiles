@@ -6,18 +6,27 @@ set PATH $HOME/.config/yarn/global/node_modules/.bin $PATH
 set PATH $HOME/.cargo/bin $PATH
 set PATH $HOME/Developer/alacritty/target/release $PATH
 
-set XDG_CACHE_HOME ~/.cache
-set EDITOR nvim
+# -gx means `--global` `--export` - a globally exported enviornment variable
+
+set -q XDG_CACHE_HOME; or set XDG_CACHE_HOME $HOME/.cache
+
+set -gx HS_TSSERVER_PATH (bpx --path hs-typescript)
+set -gx EDITOR nvim
 
 set NODE_ARGS --max_old_space_size=8192
-set IS_HUBSPOT_MACHINE "yes"
 
 function brewup
   brew update; brew upgrade; brew cleanup; brew doctor
 end
 
 function ll
-	ls -al $argv
+	exa -al $argv
+end
+
+function f
+    fff $argv
+    set -q XDG_CACHE_HOME; or set XDG_CACHE_HOME $HOME/.cache
+    cd (cat $XDG_CACHE_HOME/fff/.fff_d)
 end
 
 # function tt
@@ -25,6 +34,7 @@ end
 # end
 
 function v
+  # HS_TSSERVER_PATH=$HS_TSSERVER_PATH nvim $argv
   nvim $argv
 end
 

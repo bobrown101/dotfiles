@@ -8,7 +8,7 @@ cd ~/Developer/neovim
 #brew uninstall luarocks
 brew install libtool automake cmake pkg-config gettext
 #make CMAKE_INSTALL_PREFIX=$HOME/neovim
-make
+make CMAKE_BUILD_TYPE=RelWithDebInfo
 make install
 export PATH="$HOME/neovim/bin:$PATH"
 nvim -c "PackerInstall"

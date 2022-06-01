@@ -1,4 +1,5 @@
 vim.g.mapleader = " "
+
 local execute = vim.api.nvim_command
 local fn = vim.fn
 local install_path = fn.stdpath("data") .. "/site/pack/packer/start/packer.nvim"
@@ -105,8 +106,16 @@ require("packer").startup(function()
         config = function() require("hubspot-js-utils").setup({}) end
     })
 
+    use {
+        'bobrown101/nvim_cmp_hs_translation_source',
+        config = function()
+            require('nvim_cmp_hs_translation_source').setup()
+        end
+    }
+
     use({"bobrown101/git_blame.nvim"})
 
+    use({"nvim-lua/plenary.nvim"})
     use({
         "lewis6991/gitsigns.nvim",
         requires = {"nvim-lua/plenary.nvim"},
@@ -117,7 +126,7 @@ require("packer").startup(function()
     use("saadparwaiz1/cmp_luasnip")
 
     use("folke/tokyonight.nvim")
-
+    --
     use({
         "nvim-treesitter/nvim-treesitter",
         config = function()
@@ -139,7 +148,66 @@ require("packer").startup(function()
     use({"hrsh7th/cmp-nvim-lua"})
     use({"hrsh7th/cmp-buffer"})
 
-    use({"hrsh7th/nvim-cmp"})
+    use({
+        "hrsh7th/nvim-cmp",
+        config = function()
+            local cmp = require('cmp')
+            local lspkind = require('lspkind')
+            vim.opt.completeopt = {"menu", "menuone", "noselect"}
+            local sources = {
+                {name = 'path'}, {name = 'nvim_lsp'}, {name = 'luasnip'},
+                {name = 'buffer'}, {name = 'nvim_lua'}, {name = 'treesitter'},
+                {name = "nvim_cmp_hs_translation_source"}
+            }
+
+            cmp.setup({
+                snippet = {
+                    expand = function(args)
+                        require('luasnip').lsp_expand(args.body)
+                    end
+                },
+                mapping = {
+                    ["<Tab>"] = function(fallback)
+                        if cmp.visible() then
+                            cmp.select_next_item()
+                        else
+                            fallback()
+                        end
+                    end,
+                    ["<S-Tab>"] = function(fallback)
+                        if cmp.visible() then
+                            cmp.select_prev_item()
+                        else
+                            fallback()
+                        end
+                    end,
+                    ['<C-Space>'] = cmp.mapping(cmp.mapping.complete(),
+                                                {'i', 's'}),
+                    ['<CR>'] = cmp.mapping(cmp.mapping.confirm({select = true}),
+                                           {'i', 's'})
+                },
+                sources = sources,
+                formatting = {
+                    format = function(entry, vim_item)
+                        vim_item.kind =
+                            lspkind.presets.default[vim_item.kind] .. " " ..
+                                vim_item.kind
+
+                        -- set a name for each source
+                        vim_item.menu = ({
+                            buffer = "[Buffer]",
+                            nvim_lsp = "[LSP]",
+                            luasnip = "[LuaSnip]",
+                            nvim_lua = "[Lua]",
+                            latex_symbols = "[Latex]",
+                            nvim_cmp_hs_translation_source = "[Translation]"
+                        })[entry.source.name]
+                        return vim_item
+                    end
+                }
+            })
+        end
+    })
 
     use({"kyazdani42/nvim-web-devicons"})
 
@@ -160,9 +228,7 @@ require("packer").startup(function()
                     lualine_a = {
                         {'mode', separator = {left = ''}, right_padding = 2}
                     },
-                    lualine_b = {'filename', 'branch'},
-                    lualine_c = {fileLocationRelativeToGitRoot},
-
+                    lualine_b = {fileLocationRelativeToGitRoot, 'branch'},
                     lualine_x = {},
                     lualine_y = {'filetype', 'diff', 'progress'},
                     lualine_z = {
@@ -193,7 +259,6 @@ require("packer").startup(function()
             require('Comment').setup {
                 pre_hook = function(ctx)
                     local U = require 'Comment.utils'
-
                     local location = nil
                     if ctx.ctype == U.ctype.block then
                         location =
@@ -203,7 +268,6 @@ require("packer").startup(function()
                         location =
                             require('ts_context_commentstring.utils').get_visual_start_location()
                     end
-
                     return
                         require('ts_context_commentstring.internal').calculate_commentstring {
                             key = ctx.ctype == U.ctype.line and '__default' or
@@ -214,7 +278,6 @@ require("packer").startup(function()
             }
         end
     })
-
     use({
         "JoosepAlviste/nvim-ts-context-commentstring",
         config = function()
@@ -236,7 +299,9 @@ require("packer").startup(function()
 
     use({
         "nvim-telescope/telescope.nvim",
-        config = function() require("telescope").setup({}) end
+        config = function()
+            require("telescope").setup({defaults = {path_display = {"smart"}}})
+        end
     })
     use({
         "folke/todo-comments.nvim",
@@ -267,5 +332,4 @@ end)
 require("settings")
 require("theme")
 require("lsp")
-require("cmp-config")
 require("formatter-config")

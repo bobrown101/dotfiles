@@ -32,6 +32,8 @@ vim.g.nowritebackup = true
 vim.o.timeoutlen = 500
 vim.o.ttimeoutlen = 50
 vim.o.clipboard = 'unnamedplus'
+vim.o.laststatus = 3 -- have a single global statusline, rather than one for every window
+vim.o.winbar = "%=%m %f"
 
 -- " Use leader and hjkl to navigate windows
 vim.api.nvim_set_keymap("n", "<leader>h", "<cmd> wincmd h <CR>",

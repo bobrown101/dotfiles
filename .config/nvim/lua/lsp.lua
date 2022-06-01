@@ -1,19 +1,4 @@
 local util = require("lspconfig/util")
-local Job = require("plenary.job")
-
-function getIsHubspotMachine()
-    local result = ""
-    local testing = {}
-    Job:new({
-        command = "ls",
-        args = {vim.env.HOME .. '/.isHubspotMachine'},
-        on_exit = function(j, return_val)
-            result = return_val
-            testing = j
-        end
-    }):sync()
-    return result == 0
-end
 
 function getLogPath() return vim.lsp.get_log_path() end
 -- function getLogPath() return '/Users/brbrown/.cache/nvim/tsserver.log' end
@@ -21,17 +6,21 @@ function getLogPath() return vim.lsp.get_log_path() end
 function getTsserverLogPath() return "/Users/brbrown/.cache/nvim/tsserver.log" end
 
 function getTsserverPath()
-    local result = "/lib/tsserver.js"
-    Job:new({
-        command = "bpx",
-        args = {"--path", "hs-typescript"},
-        on_exit = function(j, return_val)
-            local path = j:result()[1]
-            result = path .. result
-        end
-    }):sync()
-
-    return result
+    return vim.env.HS_TSSERVER_PATH
+    -- local result = "/lib/tsserver.js"
+    -- Job:new({
+    --     command = "bpx",
+    --     args = {"--path", "hs-typescript"},
+    --     on_exit = function(j, return_val)
+    --         local path = j:result()[1]
+    --
+    --         result = path .. result
+    --         print('hello from on_exit'..vim.inspect(j:result()))
+    --     end
+    -- }):sync()
+    -- 
+    -- print("found tsserver path of "..result)
+    -- return result
 end
 
 local customPublishDiagnosticFunction = function(_, result, ctx, config)
@@ -60,18 +49,20 @@ end
 local on_attach = function(client, bufnr) end
 
 -- The nvim-cmp almost supports LSP's capabilities so You should advertise it to LSP servers..
-local capabilities = vim.lsp.protocol.make_client_capabilities()
-capabilities = require('cmp_nvim_lsp').update_capabilities(capabilities)
+local capabilities = require('cmp_nvim_lsp').update_capabilities(vim.lsp.protocol.make_client_capabilities())
 
-local isHubspotMachine = getIsHubspotMachine()
+-- local isHubspotMachine = getIsHubspotMachine()
+local isHubspotMachine = true
 
 if isHubspotMachine then
     print('Configuring tsserver for hubspot ecosystem')
+    local tsserverpath = getTsserverPath()
+    print('HS_TSSERVER_PATH set to ' .. tsserverpath)
     -- this is for debugging
     --     "typescript-language-server", "--log-level", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
     -- "4", "--tsserver-log-verbosity", "verbose", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
     -- "--tsserver-log-file", getTsserverLogPath(), "--tsserver-path",
-    -- getTsserverPath(), "--stdio"
+    -- tsserverpath, "--stdio"
 
     require("lspconfig").tsserver.setup({
         flags = {debounce_text_changes = 500},
@@ -80,11 +71,11 @@ if isHubspotMachine then
             "typescript-language-server", "--log-level", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
             "4", "--tsserver-log-verbosity", "verbose", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
             "--tsserver-log-file", getTsserverLogPath(), "--tsserver-path",
-            getTsserverPath(), "--stdio"
+            tsserverpath, "--stdio"
             -- "typescript-language-server", "--log-level", "1", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
             -- "--tsserver-log-verbosity", "off", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
             -- "--tsserver-log-file", getTsserverLogPath(), "--tsserver-path",
-            -- getTsserverPath(), "--stdio"
+            -- tsserverpath, "--stdio"
         },
         on_attach = on_attach,
         root_dir = util.root_pattern(".git"),
@@ -109,7 +100,6 @@ end
 
 -- yarn global add yaml-language-server
 require'lspconfig'.yamlls.setup {}
-require("lspkind").init({})
 
 vim.lsp.handlers['textDocument/signatureHelp'] =
     vim.lsp.with(vim.lsp.handlers.signature_help, {border = 'single'})
