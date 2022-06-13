@@ -55,8 +55,9 @@ require("packer").startup(function()
                 g = {
                     b = {function()
                         require('git_blame').run()
-                    end, "Git Blame"}
-                }
+                    end, "Git Blame"},
+                    t = {function() require('hubspot-js-utils').test_file() end, "Test File"}
+                },
             }, {prefix = "<leader>"})
 
             wk.register({
@@ -294,8 +295,6 @@ require("packer").startup(function()
         end
     }
     use({"mhartington/formatter.nvim"})
-
-    use({"nvim-lua/plenary.nvim"})
 
     use({
         "nvim-telescope/telescope.nvim",
