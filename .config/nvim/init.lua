@@ -56,8 +56,12 @@ require("packer").startup(function()
                     b = {function()
                         require('git_blame').run()
                     end, "Git Blame"},
-                    t = {function() require('hubspot-js-utils').test_file() end, "Test File"}
-                },
+                    t = {
+                        function()
+                            require('hubspot-js-utils').test_file()
+                        end, "Test File"
+                    }
+                }
             }, {prefix = "<leader>"})
 
             wk.register({
@@ -299,7 +303,18 @@ require("packer").startup(function()
     use({
         "nvim-telescope/telescope.nvim",
         config = function()
-            require("telescope").setup({defaults = {path_display = {"smart"}}})
+            require("telescope").setup({
+                defaults = {
+                    path_display = {"smart"},
+                    layout_strategy = "vertical",
+                    layout_config = {
+                        height = vim.o.lines, -- maximally available lines
+                        width = vim.o.columns, -- maximally available columns
+                        prompt_position = "top",
+                        preview_height = 0.6 -- 60% of available lines
+                    }
+                }
+            })
         end
     })
     use({
