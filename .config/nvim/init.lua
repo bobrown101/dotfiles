@@ -15,8 +15,13 @@ end
 require("packer").startup(function()
 
     use({"wbthomason/packer.nvim"})
-
     use({"bobrown101/plugin-utils.nvim"})
+
+    use {'stevearc/dressing.nvim'}
+    use({
+        "~/Developer/prompt-deleted-file.nvim",
+        config = function() require('prompt-deleted-file').setup() end
+    })
 
     use({"bobrown101/fff.nvim"})
 
@@ -304,16 +309,16 @@ require("packer").startup(function()
         "nvim-telescope/telescope.nvim",
         config = function()
             require("telescope").setup({
-                defaults = {
-                    path_display = {"smart"},
-                    layout_strategy = "vertical",
-                    layout_config = {
-                        height = vim.o.lines, -- maximally available lines
-                        width = vim.o.columns, -- maximally available columns
-                        prompt_position = "top",
-                        preview_height = 0.6 -- 60% of available lines
-                    }
-                }
+                -- defaults = {
+                --     path_display = {"smart"},
+                --     layout_strategy = "vertical",
+                --     layout_config = {
+                --         height = vim.o.lines, -- maximally available lines
+                --         width = vim.o.columns, -- maximally available columns
+                --         prompt_position = "top",
+                --         preview_height = 0.6 -- 60% of available lines
+                --     }
+                -- }
             })
         end
     })

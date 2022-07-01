@@ -49,15 +49,17 @@ end
 local on_attach = function(client, bufnr) end
 
 -- The nvim-cmp almost supports LSP's capabilities so You should advertise it to LSP servers..
-local capabilities = require('cmp_nvim_lsp').update_capabilities(vim.lsp.protocol.make_client_capabilities())
+local capabilities = require('cmp_nvim_lsp').update_capabilities(vim.lsp
+                                                                     .protocol
+                                                                     .make_client_capabilities())
 
 -- local isHubspotMachine = getIsHubspotMachine()
 local isHubspotMachine = true
 
 if isHubspotMachine then
-    print('Configuring tsserver for hubspot ecosystem')
+    -- print('Configuring tsserver for hubspot ecosystem')
     local tsserverpath = getTsserverPath()
-    print('HS_TSSERVER_PATH set to ' .. tsserverpath)
+    -- print('HS_TSSERVER_PATH set to ' .. tsserverpath)
     -- this is for debugging
     --     "typescript-language-server", "--log-level", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
     -- "4", "--tsserver-log-verbosity", "verbose", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
