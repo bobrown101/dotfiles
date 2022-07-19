@@ -18,10 +18,10 @@ require("packer").startup(function()
     use({"bobrown101/plugin-utils.nvim"})
 
     use {'stevearc/dressing.nvim'}
-    use({
-        "~/Developer/prompt-deleted-file.nvim",
-        config = function() require('prompt-deleted-file').setup() end
-    })
+    -- use({
+    --     "~/Developer/prompt-deleted-file.nvim",
+    --     config = function() require('prompt-deleted-file').setup() end
+    -- })
 
     use({"bobrown101/fff.nvim"})
 
@@ -331,7 +331,7 @@ require("packer").startup(function()
         config = function()
             require("null-ls").setup({
                 sources = {
-                    require("null-ls").builtins.diagnostics.eslint_d,
+                    require("null-ls").builtins.diagnostics.eslint,
                     require("null-ls").builtins.formatting.stylua
                 }
             })

@@ -57,27 +57,15 @@ local capabilities = require('cmp_nvim_lsp').update_capabilities(vim.lsp
 local isHubspotMachine = true
 
 if isHubspotMachine then
-    -- print('Configuring tsserver for hubspot ecosystem')
     local tsserverpath = getTsserverPath()
-    -- print('HS_TSSERVER_PATH set to ' .. tsserverpath)
-    -- this is for debugging
-    --     "typescript-language-server", "--log-level", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
-    -- "4", "--tsserver-log-verbosity", "verbose", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
-    -- "--tsserver-log-file", getTsserverLogPath(), "--tsserver-path",
-    -- tsserverpath, "--stdio"
-
+    -- print('tsserverpath ' .. tsserverpath)
     require("lspconfig").tsserver.setup({
         flags = {debounce_text_changes = 500},
         cmd = {
-
             "typescript-language-server", "--log-level", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
             "4", "--tsserver-log-verbosity", "verbose", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
             "--tsserver-log-file", getTsserverLogPath(), "--tsserver-path",
             tsserverpath, "--stdio"
-            -- "typescript-language-server", "--log-level", "1", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
-            -- "--tsserver-log-verbosity", "off", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
-            -- "--tsserver-log-file", getTsserverLogPath(), "--tsserver-path",
-            -- tsserverpath, "--stdio"
         },
         on_attach = on_attach,
         root_dir = util.root_pattern(".git"),
