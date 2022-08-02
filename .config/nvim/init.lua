@@ -18,11 +18,21 @@ require("packer").startup(function()
     use({"bobrown101/plugin-utils.nvim"})
 
     use {'stevearc/dressing.nvim'}
-    -- use({
-    --     "~/Developer/prompt-deleted-file.nvim",
-    --     config = function() require('prompt-deleted-file').setup() end
-    -- })
 
+    use({
+        "williamboman/mason-lspconfig.nvim",
+        config = function()
+            require("mason-lspconfig").setup({
+                ensure_installed = {"prettierd", "eslint_d"}
+            })
+
+        end
+    })
+
+    use({
+        "williamboman/mason.nvim",
+        config = function() require('mason').setup() end
+    })
     use({"bobrown101/fff.nvim"})
 
     use({
@@ -352,3 +362,22 @@ require("settings")
 require("theme")
 require("lsp")
 require("formatter-config")
+
+function switchImportStyleOfLine(line)
+    local s = line
+    s = string.gsub(s, "import {", "import * as")
+    s = string.gsub(s, "}", "")
+
+    return s
+end
+
+local switchImportStyleOfCurrentLine = function()
+    vim.api.nvim_set_current_line( --
+    switchImportStyleOfLine( --
+    vim.api.nvim_get_current_line() --
+    ) --
+    )
+end
+
+vim.api.nvim_create_user_command("SwitchImportStyle",
+                                 switchImportStyleOfCurrentLine, {})
