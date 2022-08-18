@@ -53,15 +53,10 @@ require('formatter').setup({
         javascript = {
             -- prettier
             function()
-                local rootDir = get_current_root_dir()
-                local exe_path = path_join(rootDir, 'node_modules', 'prettier',
-                                           'bin-prettier.js')
-                local config_path = path_join(rootDir, 'prettier.config.js')
                 return {
-                    exe = exe_path,
+                    exe = "prettier",
                     args = {
                         "--stdin-filepath", vim.api.nvim_buf_get_name(0),
-                        '--config', config_path
                     },
                     stdin = true
                 }
@@ -75,7 +70,6 @@ require('formatter').setup({
                     exe = "prettier",
                     args = {
                         "--stdin-filepath", vim.api.nvim_buf_get_name(0),
-                        '--config ~/prettier.config.js'
                     },
                     stdin = true
                 }
@@ -89,7 +83,6 @@ require('formatter').setup({
                     exe = "prettier",
                     args = {
                         "--stdin-filepath", vim.api.nvim_buf_get_name(0),
-                        '--config ~/prettier.config.js'
                     },
                     stdin = true
                 }
@@ -102,8 +95,7 @@ require('formatter').setup({
                 return {
                     exe = "prettier",
                     args = {
-                        "--stdin-filepath", vim.api.nvim_buf_get_name(0),
-                        '--config ~/prettier.config.js'
+                        "--stdin-filepath", vim.api.nvim_buf_get_name(0)
                     },
                     stdin = true
                 }
@@ -117,7 +109,6 @@ require('formatter').setup({
                     exe = "prettier",
                     args = {
                         "--stdin-filepath", vim.api.nvim_buf_get_name(0),
-                        '--config ~/prettier.config.js'
                     },
                     stdin = true
                 }
