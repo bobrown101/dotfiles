@@ -47,7 +47,7 @@ function t
 end
 
 function pretty
-  bend prettier --write (git diff --name-only --cached) && git add (git diff --name-only --cached)
+  bend hs-prettier --write (git diff --name-only --cached) && git add (git diff --name-only --cached)
 end
 
 function gr

@@ -17,22 +17,23 @@ require("packer").startup(function()
     use({"wbthomason/packer.nvim"})
     use({"bobrown101/plugin-utils.nvim"})
 
-    use {'stevearc/dressing.nvim'}
+    --[[ use({"~/Developer/ts-highlight-implicit-any.nvim/"}) ]]
+    --[[ use {'stevearc/dressing.nvim'} ]]
 
-    use({
-        "williamboman/mason-lspconfig.nvim",
-        config = function()
-            require("mason-lspconfig").setup({
-                ensure_installed = {"prettierd", "eslint_d"}
-            })
-
-        end
-    })
-
-    use({
-        "williamboman/mason.nvim",
-        config = function() require('mason').setup() end
-    })
+    --[[ use({ ]]
+    --[[     "williamboman/mason-lspconfig.nvim", ]]
+    --[[     config = function() ]]
+    --[[         require("mason-lspconfig").setup({ ]]
+    --[[             ensure_installed = {"prettierd", "eslint_d"} ]]
+    --[[         }) ]]
+    --[[]]
+    --[[     end ]]
+    --[[ }) ]]
+    --[[]]
+    --[[ use({ ]]
+    --[[     "williamboman/mason.nvim", ]]
+    --[[     config = function() require('mason').setup() end ]]
+    --[[ }) ]]
     use({"bobrown101/fff.nvim"})
 
     use({
@@ -146,21 +147,22 @@ require("packer").startup(function()
     use("saadparwaiz1/cmp_luasnip")
 
     use("folke/tokyonight.nvim")
-    --
-    use({
-        "nvim-treesitter/nvim-treesitter",
+    
+     use({
+         "nvim-treesitter/nvim-treesitter",
         config = function()
-
-            local treesitter = require('nvim-treesitter.configs')
-
-            treesitter.setup({
-                ensure_installed = "all",
-                ignore_install = {"haskell"},
-                highlight = {enable = true},
-                context_commentstring = {enable = true}
-            })
-        end
-    })
+  
+             local treesitter = require('nvim-treesitter.configs')
+  
+             treesitter.setup({
+                 ensure_installed = "all",
+                 ignore_install = {"haskell"},
+                 highlight = {enable = true},
+                 context_commentstring = {enable = true}
+             })
+         end
+     })
+    use({'nvim-treesitter/playground'})
     use({"neovim/nvim-lspconfig"})
 
     use({"onsails/lspkind-nvim"})
@@ -173,7 +175,7 @@ require("packer").startup(function()
         config = function()
             local cmp = require('cmp')
             local lspkind = require('lspkind')
-            vim.opt.completeopt = {"menu", "menuone", "noselect"}
+            --[[ vim.opt.completeopt = {"menu", "menuone", "noselect"} ]]
             local sources = {
                 {name = 'path'}, {name = 'nvim_lsp'}, {name = 'luasnip'},
                 {name = 'buffer'}, {name = 'nvim_lua'}, {name = 'treesitter'},
@@ -338,11 +340,13 @@ require("packer").startup(function()
     })
     use({
         "jose-elias-alvarez/null-ls.nvim",
+        requires = {"~/Developer/ts-highlight-implicit-any.nvim"},
         config = function()
             require("null-ls").setup({
                 sources = {
                     require("null-ls").builtins.diagnostics.eslint,
                     require("null-ls").builtins.formatting.stylua
+                    --[[ require("ts-highlight-implicit-any").ts_highlight_implicity_any ]]
                 }
             })
         end
