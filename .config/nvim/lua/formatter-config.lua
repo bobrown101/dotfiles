@@ -1,4 +1,5 @@
 local path_sep = vim.loop.os_uname().sysname == "Windows" and "\\" or "/"
+
 local function path_join(...)
     return table.concat(vim.tbl_flatten {...}, path_sep)
 end

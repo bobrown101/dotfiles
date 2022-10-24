@@ -6,7 +6,7 @@ function getLogPath() return vim.lsp.get_log_path() end
 function getTsserverLogPath() return "/Users/brbrown/.cache/nvim/tsserver.log" end
 
 function getTsserverPath()
-    return vim.env.HS_TSSERVER_PATH
+    return vim.env.TSSERVER_PATH
     -- local result = "/lib/tsserver.js"
     -- Job:new({
     --     command = "bpx",
@@ -48,10 +48,7 @@ end
 
 local on_attach = function(client, bufnr) end
 
--- The nvim-cmp almost supports LSP's capabilities so You should advertise it to LSP servers..
-local capabilities = require('cmp_nvim_lsp').update_capabilities(vim.lsp
-                                                                     .protocol
-                                                                     .make_client_capabilities())
+local capabilities = require('cmp_nvim_lsp').default_capabilities()
 
 -- local isHubspotMachine = getIsHubspotMachine()
 local isHubspotMachine = true
