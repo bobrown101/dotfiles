@@ -2,6 +2,7 @@
 brew update 
 brew upgrade
 rm -rf ~/neovim
+rm -rf /usr/local/share/nvim/
 rm -rf ~/Developer/neovim
 git clone https://github.com/neovim/neovim ~/Developer/neovim
 cd ~/Developer/neovim
