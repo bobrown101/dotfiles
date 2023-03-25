@@ -138,12 +138,12 @@ require("packer").startup(function()
 		end,
 	})
 
-	use({
-		"bobrown101/nvim_cmp_hs_translation_source",
-		config = function()
-			require("nvim_cmp_hs_translation_source").setup()
-		end,
-	})
+	--[[ use({ ]]
+	--[[ 	"bobrown101/nvim_cmp_hs_translation_source", ]]
+	--[[ 	config = function() ]]
+	--[[ 		require("nvim_cmp_hs_translation_source").setup() ]]
+	--[[ 	end, ]]
+	--[[ }) ]]
 
 	use({ "bobrown101/git_blame.nvim" })
 
@@ -195,7 +195,7 @@ require("packer").startup(function()
 				{ name = "buffer" },
 				{ name = "nvim_lua" },
 				{ name = "treesitter" },
-				{ name = "nvim_cmp_hs_translation_source" },
+				--[[ { name = "nvim_cmp_hs_translation_source" }, ]]
 			}
 
 			cmp.setup({
