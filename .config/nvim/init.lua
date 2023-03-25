@@ -1,28 +1,32 @@
 vim.g.mapleader = " "
 
-local execute = vim.api.nvim_command
-local fn = vim.fn
-local install_path = fn.stdpath("data") .. "/site/pack/packer/start/packer.nvim"
-
-if fn.empty(fn.glob(install_path)) > 0 then
-	fn.system({
+local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
+if not vim.loop.fs_stat(lazypath) then
+	vim.fn.system({
 		"git",
 		"clone",
-		"https://github.com/wbthomason/packer.nvim",
-		install_path,
+		"--filter=blob:none",
+		"https://github.com/folke/lazy.nvim.git",
+		"--branch=stable", -- latest stable release
+		lazypath,
 	})
-	execute("packadd packer.nvim")
 end
+vim.opt.rtp:prepend(lazypath)
 
-require("packer").startup(function()
-	use({ "wbthomason/packer.nvim" })
-	use({ "bobrown101/plugin-utils.nvim" })
-
-	--[[ use({"~/Developer/ts-highlight-implicit-any.nvim/"}) ]]
-
-	use({ "bobrown101/fff.nvim" })
-
-	use({
+require("lazy").setup({
+	{
+		"folke/tokyonight.nvim",
+		lazy = false, -- make sure we load this during startup if it is your main colorscheme
+		priority = 1000, -- make sure to load this before all the other start plugins
+		config = function()
+			-- load the colorscheme here
+			vim.cmd([[colorscheme tokyonight]])
+		end,
+	},
+	"wbthomason/packer.nvim",
+	"bobrown101/plugin-utils.nvim",
+	"bobrown101/fff.nvim",
+	{
 		"folke/which-key.nvim",
 		config = function()
 			local wk = require("which-key")
@@ -120,48 +124,39 @@ require("packer").startup(function()
 				},
 			}, { mode = "t", prefix = "<esc>" })
 		end,
-	})
+	},
 
-	use({
+	{
 		"bobrown101/asset-bender.nvim",
 		requires = { "bobrown101/plugin-utils.nvim" },
 		config = function()
 			require("asset-bender").setup({})
 		end,
-	})
+	},
 
-	use({
-		"~/Developer/hubspot-js-utils.nvim",
+	{
+		"bobrown101/hubspot-js-utils.nvim",
 		requires = { "bobrown101/plugin-utils.nvim" },
 		config = function()
 			require("hubspot-js-utils").setup({})
 		end,
-	})
+	},
 
-	--[[ use({ ]]
-	--[[ 	"bobrown101/nvim_cmp_hs_translation_source", ]]
-	--[[ 	config = function() ]]
-	--[[ 		require("nvim_cmp_hs_translation_source").setup() ]]
-	--[[ 	end, ]]
-	--[[ }) ]]
+	"bobrown101/git_blame.nvim",
 
-	use({ "bobrown101/git_blame.nvim" })
-
-	use({ "nvim-lua/plenary.nvim" })
-	use({
+	"nvim-lua/plenary.nvim",
+	{
 		"lewis6991/gitsigns.nvim",
 		requires = { "nvim-lua/plenary.nvim" },
 		config = function()
 			require("gitsigns").setup()
 		end,
-	})
+	},
 
-	use("L3MON4D3/LuaSnip")
-	use("saadparwaiz1/cmp_luasnip")
+	"L3MON4D3/LuaSnip",
+	"saadparwaiz1/cmp_luasnip",
 
-	use("folke/tokyonight.nvim")
-
-	use({
+	{
 		"nvim-treesitter/nvim-treesitter",
 		config = function()
 			local treesitter = require("nvim-treesitter.configs")
@@ -173,16 +168,15 @@ require("packer").startup(function()
 				context_commentstring = { enable = true },
 			})
 		end,
-	})
-	use({ "nvim-treesitter/playground" })
-	use({ "neovim/nvim-lspconfig" })
+	},
+	"neovim/nvim-lspconfig",
 
-	use({ "onsails/lspkind-nvim" })
-	use({ "hrsh7th/cmp-nvim-lsp" })
-	use({ "hrsh7th/cmp-nvim-lua" })
-	use({ "hrsh7th/cmp-buffer" })
+	"onsails/lspkind-nvim",
+	"hrsh7th/cmp-nvim-lsp",
+	"hrsh7th/cmp-nvim-lua",
+	"hrsh7th/cmp-buffer",
 
-	use({
+	{
 		"hrsh7th/nvim-cmp",
 		config = function()
 			local cmp = require("cmp")
@@ -241,11 +235,11 @@ require("packer").startup(function()
 				},
 			})
 		end,
-	})
+	},
 
-	use({ "kyazdani42/nvim-web-devicons" })
+	"kyazdani42/nvim-web-devicons",
 
-	use({
+	{
 		"nvim-lualine/lualine.nvim",
 		requires = { "kyazdani42/nvim-web-devicons", opt = true },
 		config = function()
@@ -285,73 +279,53 @@ require("packer").startup(function()
 				extensions = {},
 			})
 		end,
-	})
+	},
 
-	use({
+	{
 		"numToStr/Comment.nvim",
 		config = function()
 			require("Comment").setup({
-				pre_hook = function(ctx)
-					local U = require("Comment.utils")
-					local location = nil
-					if ctx.ctype == U.ctype.block then
-						location = require("ts_context_commentstring.utils").get_cursor_location()
-					elseif ctx.cmotion == U.cmotion.v or ctx.cmotion == U.cmotion.V then
-						location = require("ts_context_commentstring.utils").get_visual_start_location()
-					end
-					return
-						require("ts_context_commentstring.internal").calculate_commentstring({
-						key = ctx.ctype == U.ctype.line and "__default" or "__multiline",
-						location = location,
-					})
-				end,
+				pre_hook = require("ts_context_commentstring.integrations.comment_nvim").create_pre_hook(),
 			})
 		end,
-	})
-	use({
+	},
+	{
 		"JoosepAlviste/nvim-ts-context-commentstring",
 		config = function()
 			require("nvim-treesitter.configs").setup({
-				context_commentstring = { enable = true, enable_autocmd = false },
+				context_commentstring = {
+					enable = true,
+					enable_autocmd = false,
+				},
 			})
 		end,
-	})
-	use({
+	},
+	{
 		"goolord/alpha-nvim",
 		requires = { "kyazdani42/nvim-web-devicons" },
 		config = function()
 			require("alpha").setup(require("alpha.themes.startify").config)
 		end,
-	})
-	use({ "mhartington/formatter.nvim" })
+	},
+	"mhartington/formatter.nvim",
 
-	use({
+	{
 		"nvim-telescope/telescope.nvim",
 		config = function()
 			require("telescope").setup({
-        defaults = {
-          wrap_results = true,
-        }
-				-- defaults = {
-				--     path_display = {"smart"},
-				--     layout_strategy = "vertical",
-				--     layout_config = {
-				--         height = vim.o.lines, -- maximally available lines
-				--         width = vim.o.columns, -- maximally available columns
-				--         prompt_position = "top",
-				--         preview_height = 0.6 -- 60% of available lines
-				--     }
-				-- }
+				defaults = {
+					wrap_results = true,
+				},
 			})
 		end,
-	})
-	use({
+	},
+	{
 		"folke/todo-comments.nvim",
 		config = function()
 			require("todo-comments").setup({})
 		end,
-	})
-	use({
+	},
+	{
 		"jose-elias-alvarez/null-ls.nvim",
 		requires = { "~/Developer/ts-highlight-implicit-any.nvim" },
 		config = function()
@@ -359,41 +333,35 @@ require("packer").startup(function()
 				sources = {
 					require("null-ls").builtins.diagnostics.eslint,
 					require("null-ls").builtins.formatting.stylua,
-					--[[ require("ts-highlight-implicit-any").ts_highlight_implicity_any ]]
 				},
+				-- you can reuse a shared lspconfig on_attach callback here
+				on_attach = function(client, bufnr)
+					if client.supports_method("textDocument/formatting") then
+						vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
+						vim.api.nvim_create_autocmd("BufWritePre", {
+							group = augroup,
+							buffer = bufnr,
+							callback = function()
+								vim.lsp.buf.format({ bufnr = bufnr })
+							end,
+						})
+					end
+				end,
 			})
 		end,
-	})
+	},
 
-	use({
+	{
 		"lukas-reineke/indent-blankline.nvim",
 		config = function()
 			vim.opt.listchars:append("space:⋅")
 
 			require("indent_blankline").setup({})
 		end,
-	})
-end)
+	},
+})
 
 require("settings")
 require("theme")
 require("lsp")
 require("formatter-config")
-
-function switchImportStyleOfLine(line)
-	local s = line
-	s = string.gsub(s, "import {", "import * as")
-	s = string.gsub(s, "}", "")
-
-	return s
-end
-
-local switchImportStyleOfCurrentLine = function()
-	vim.api.nvim_set_current_line( --
-		switchImportStyleOfLine( --
-			vim.api.nvim_get_current_line() --
-		) --
-	)
-end
-
-vim.api.nvim_create_user_command("SwitchImportStyle", switchImportStyleOfCurrentLine, {})

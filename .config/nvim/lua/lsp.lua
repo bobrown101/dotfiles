@@ -69,8 +69,8 @@ if isHubspotMachine then
 			"4",
 			"--tsserver-log-verbosity",
 			"verbose", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
-			"--tsserver-log-file",
-			getTsserverLogPath(),
+			-- "--tsserver-log-file",
+			-- getTsserverLogPath(),
 			"--tsserver-path",
 			tsserverpath,
 			"--stdio",
