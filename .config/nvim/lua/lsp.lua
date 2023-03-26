@@ -1,30 +1,16 @@
 local util = require("lspconfig/util")
 
-function getLogPath()
-	return vim.lsp.get_log_path()
+function get_npm_path()
+	return vim.env.NPM_PATH
 end
--- function getLogPath() return '/Users/brbrown/.cache/nvim/tsserver.log' end
 
-function getTsserverLogPath()
-	return "/Users/brbrown/.cache/nvim/tsserver.log"
+function getLogPath()
+	return "~/.cache/nvim/tsserver"
+	-- return vim.lsp.get_log_path()
 end
 
 function getTsserverPath()
 	return vim.env.TSSERVER_PATH
-	-- local result = "/lib/tsserver.js"
-	-- Job:new({
-	--     command = "bpx",
-	--     args = {"--path", "hs-typescript"},
-	--     on_exit = function(j, return_val)
-	--         local path = j:result()[1]
-	--
-	--         result = path .. result
-	--         print('hello from on_exit'..vim.inspect(j:result()))
-	--     end
-	-- }):sync()
-	--
-	-- print("found tsserver path of "..result)
-	-- return result
 end
 
 local customPublishDiagnosticFunction = function(_, result, ctx, config)
@@ -60,27 +46,32 @@ local isHubspotMachine = true
 
 if isHubspotMachine then
 	local tsserverpath = getTsserverPath()
-	-- print('tsserverpath ' .. tsserverpath)
 	require("lspconfig").tsserver.setup({
 		flags = { debounce_text_changes = 500 },
 		cmd = {
 			"typescript-language-server",
 			"--log-level", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
 			"4",
-			"--tsserver-log-verbosity",
-			"verbose", -- Specify tsserver log verbosity (off, terse, normal, verbose). Defaults to `normal`. example: --tsserver-log-verbosity=verbose
-			-- "--tsserver-log-file",
-			-- getTsserverLogPath(),
-			"--tsserver-path",
-			tsserverpath,
 			"--stdio",
 		},
 		on_attach = on_attach,
 		root_dir = util.root_pattern(".git"),
-		handlers = {
-			["textDocument/publishDiagnostics"] = vim.lsp.with(customPublishDiagnosticFunction, {}),
+		-- handlers = {
+		-- ["textDocument/publishDiagnostics"] = vim.lsp.with(customPublishDiagnosticFunction, {}),
+		-- },
+		init_options = {
+			hostInfo = "neovim",
+			masTsServerMemory = 16384,
+			npmLocation = get_npm_path(),
+			disableAutomaticTypingAcquisition = true,
+			tsserver = {
+				logDirectory = getLogPath(),
+				-- logVerbosity?: 'off' | 'terse' | 'normal' | 'requestTime' | 'verbose';
+				logVerbosity = "verbose",
+				path = tsserverpath,
+				lazyConfiguredProjectsFromExternalProject = true,
+			},
 		},
-		init_options = { hostInfo = "neovim" },
 		filetypes = {
 			"javascript",
 			"javascriptreact",

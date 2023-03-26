@@ -11,6 +11,7 @@ set PATH $HOME/Developer/alacritty/target/release $PATH
 set -q XDG_CACHE_HOME; or set XDG_CACHE_HOME $HOME/.cache
 
 set -gx TSSERVER_PATH (bpx --path hs-typescript)
+set -gx NPM_PATH (which npm)
 set -gx EDITOR nvim
 
 set NODE_ARGS --max_old_space_size=8192
