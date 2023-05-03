@@ -327,7 +327,6 @@ require("lazy").setup({
 	},
 	{
 		"jose-elias-alvarez/null-ls.nvim",
-		requires = { "~/Developer/ts-highlight-implicit-any.nvim" },
 		config = function()
 			require("null-ls").setup({
 				sources = {
