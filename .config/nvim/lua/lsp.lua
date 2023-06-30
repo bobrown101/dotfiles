@@ -46,42 +46,85 @@ local isHubspotMachine = true
 
 if isHubspotMachine then
 	local tsserverpath = getTsserverPath()
-	require("lspconfig").tsserver.setup({
-		flags = { debounce_text_changes = 500 },
-		cmd = {
-			"typescript-language-server",
-			"--log-level", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
-			"4",
-			"--stdio",
+	require("typescript").setup({
+		disable_commands = false, -- prevent the plugin from creating Vim commands
+		debug = false, -- enable debug logging for commands
+		go_to_source_definition = {
+			fallback = true, -- fall back to standard LSP definition on failure
 		},
-		on_attach = on_attach,
-		root_dir = util.root_pattern(".git"),
-		-- handlers = {
-		-- ["textDocument/publishDiagnostics"] = vim.lsp.with(customPublishDiagnosticFunction, {}),
-		-- },
-		init_options = {
-			hostInfo = "neovim",
-			masTsServerMemory = 16384,
-			npmLocation = get_npm_path(),
-			disableAutomaticTypingAcquisition = true,
-			tsserver = {
-				logDirectory = getLogPath(),
-				-- logVerbosity?: 'off' | 'terse' | 'normal' | 'requestTime' | 'verbose';
-				logVerbosity = "verbose",
-				path = tsserverpath,
-				lazyConfiguredProjectsFromExternalProject = true,
+		server = { -- pass options to lspconfig's setup method
+			flags = { debounce_text_changes = 500 },
+			cmd = {
+				"typescript-language-server",
+				"--log-level", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
+				"4",
+				"--stdio",
 			},
+			on_attach = on_attach,
+			root_dir = util.root_pattern(".git"),
+			-- handlers = {
+			-- ["textDocument/publishDiagnostics"] = vim.lsp.with(customPublishDiagnosticFunction, {}),
+			-- },
+			init_options = {
+				hostInfo = "neovim",
+				masTsServerMemory = 16384,
+				npmLocation = get_npm_path(),
+				disableAutomaticTypingAcquisition = true,
+				tsserver = {
+					logDirectory = getLogPath(),
+					-- logVerbosity?: 'off' | 'terse' | 'normal' | 'requestTime' | 'verbose';
+					logVerbosity = "verbose",
+					path = tsserverpath,
+					lazyConfiguredProjectsFromExternalProject = true,
+				},
+			},
+			filetypes = {
+				"javascript",
+				"javascriptreact",
+				"javascript.jsx",
+				"typescript",
+				"typescriptreact",
+				"typescript.tsx",
+			},
+			capabilities = capabilities,
 		},
-		filetypes = {
-			"javascript",
-			"javascriptreact",
-			"javascript.jsx",
-			"typescript",
-			"typescriptreact",
-			"typescript.tsx",
-		},
-		capabilities = capabilities,
 	})
+	-- require("lspconfig").tsserver.setup({
+	-- 	flags = { debounce_text_changes = 500 },
+	-- 	cmd = {
+	-- 		"typescript-language-server",
+	-- 		"--log-level", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
+	-- 		"4",
+	-- 		"--stdio",
+	-- 	},
+	-- 	on_attach = on_attach,
+	-- 	root_dir = util.root_pattern(".git"),
+	-- 	-- handlers = {
+	-- 	-- ["textDocument/publishDiagnostics"] = vim.lsp.with(customPublishDiagnosticFunction, {}),
+	-- 	-- },
+	-- 	init_options = {
+	-- 		hostInfo = "neovim",
+	-- 		masTsServerMemory = 16384,
+	-- 		npmLocation = get_npm_path(),
+	-- 		disableAutomaticTypingAcquisition = true,
+	-- 		tsserver = {
+	-- 			logDirectory = getLogPath(),
+	-- 			-- logVerbosity?: 'off' | 'terse' | 'normal' | 'requestTime' | 'verbose';
+	-- 			logVerbosity = "verbose",
+	-- 			path = tsserverpath,
+	-- 			lazyConfiguredProjectsFromExternalProject = true,
+	-- 		},
+	-- 	},
+	-- 	filetypes = {
+	-- 		"javascript",
+	-- 		"javascriptreact",
+	-- 		"javascript.jsx",
+	-- 		"typescript",
+	-- 		"typescriptreact",
+	-- 		"typescript.tsx",
+	-- 	},
+	-- 	capabilities = capabilities,
+	-- })
 else
 	require("lspconfig").tsserver.setup({})
 end
