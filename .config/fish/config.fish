@@ -5,12 +5,13 @@ set PATH $HOME/.yarn/bin $PATH
 set PATH $HOME/.config/yarn/global/node_modules/.bin $PATH
 set PATH $HOME/.cargo/bin $PATH
 set PATH $HOME/Developer/alacritty/target/release $PATH
+set PATH $HOME/.local/share/bob/nvim-bin $PATH
 
 # -gx means `--global` `--export` - a globally exported enviornment variable
 
 set -q XDG_CACHE_HOME; or set XDG_CACHE_HOME $HOME/.cache
 
-set -gx TSSERVER_PATH (bpx --path hs-typescript)
+#set -gx TSSERVER_PATH (bpx --path hs-typescript)
 set -gx NPM_PATH (which npm)
 set -gx EDITOR nvim
 
