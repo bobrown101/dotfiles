@@ -432,5 +432,4 @@ require("lazy").setup({
 vim.lsp.set_log_level("trace")
 
 require("settings")
-require("theme")
 require("formatter-config")
