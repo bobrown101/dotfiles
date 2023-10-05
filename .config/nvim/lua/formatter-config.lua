@@ -1,4 +1,4 @@
-
+local util = require("formatter.util")
 require("formatter").setup({
 	logging = false,
 	filetype = {
@@ -77,8 +77,16 @@ require("formatter").setup({
 		lua = {
 			function()
 				return {
-					exe = "lua-format",
-					args = { vim.api.nvim_buf_get_name(0) },
+					exe = "stylua",
+					args = {
+						"--search-parent-directories",
+						"--indent-type",
+						"Tabs",
+						"--stdin-filepath",
+						util.escape_path(util.get_current_buffer_file_path()),
+						"--",
+						"-",
+					},
 					stdin = true,
 				}
 			end,

@@ -14,6 +14,7 @@ end
 vim.opt.rtp:prepend(lazypath)
 
 require("lazy").setup({
+	{ "folke/neodev.nvim", opts = {} },
 	{
 		"folke/tokyonight.nvim",
 		lazy = false, -- make sure we load this during startup if it is your main colorscheme
@@ -30,6 +31,15 @@ require("lazy").setup({
 			vim.cmd([[colorscheme tokyonight]])
 		end,
 	},
+	{
+		"j-hui/fidget.nvim",
+		tag = "legacy",
+		event = "LspAttach",
+		opts = {
+			-- options
+		},
+	},
+	"sindrets/diffview.nvim",
 	"wbthomason/packer.nvim",
 	"bobrown101/plugin-utils.nvim",
 	"bobrown101/fff.nvim",
@@ -185,13 +195,6 @@ require("lazy").setup({
 			},
 		},
 	},
-	{
-		"bobrown101/asset-bender.nvim",
-		requires = { "bobrown101/plugin-utils.nvim" },
-		config = function()
-			require("asset-bender").setup({})
-		end,
-	},
 
 	{
 		"bobrown101/hubspot-js-utils.nvim",
@@ -214,7 +217,6 @@ require("lazy").setup({
 
 	"L3MON4D3/LuaSnip",
 	"saadparwaiz1/cmp_luasnip",
-	"jose-elias-alvarez/typescript.nvim",
 	{
 		"nvim-treesitter/nvim-treesitter",
 		config = function()
@@ -229,7 +231,6 @@ require("lazy").setup({
 		end,
 	},
 	"neovim/nvim-lspconfig",
-
 	"onsails/lspkind-nvim",
 	"hrsh7th/cmp-nvim-lsp",
 	"hrsh7th/cmp-nvim-lua",
@@ -384,41 +385,52 @@ require("lazy").setup({
 			require("todo-comments").setup({})
 		end,
 	},
-	{
-		"jose-elias-alvarez/null-ls.nvim",
-		config = function()
-			require("null-ls").setup({
-				sources = {
-					require("null-ls").builtins.diagnostics.eslint,
-					require("null-ls").builtins.formatting.stylua,
-				},
-				-- you can reuse a shared lspconfig on_attach callback here
-				on_attach = function(client, bufnr)
-					if client.supports_method("textDocument/formatting") then
-						vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
-						vim.api.nvim_create_autocmd("BufWritePre", {
-							group = augroup,
-							buffer = bufnr,
-							callback = function()
-								vim.lsp.buf.format({ bufnr = bufnr })
-							end,
-						})
-					end
-				end,
-			})
-		end,
-	},
+	-- {
+	-- 	"jose-elias-alvarez/null-ls.nvim",
+	-- 	config = function()
+	-- 		require("null-ls").setup({
+	-- 			sources = {
+	-- 				require("null-ls").builtins.diagnostics.eslint,
+	-- 				-- require("null-ls").builtins.formatting.stylua,
+	-- 			},
+	-- 			-- you can reuse a shared lspconfig on_attach callback here
+	-- 			on_attach = function(client, bufnr)
+	-- 				if client.supports_method("textDocument/formatting") then
+	-- 					vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
+	-- 					vim.api.nvim_create_autocmd("BufWritePre", {
+	-- 						group = augroup,
+	-- 						buffer = bufnr,
+	-- 						callback = function()
+	-- 							vim.lsp.buf.format({ bufnr = bufnr })
+	-- 						end,
+	-- 					})
+	-- 				end
+	-- 			end,
+	-- 		})
+	-- 	end,
+	-- },
+
+	-- {
+	-- 	"lukas-reineke/indent-blankline.nvim",
+	-- 	config = function()
+	-- 		vim.opt.listchars:append("space:⋅")
+	--
+	-- 		require("indent_blankline").setup({})
+	-- 	end,
+	-- },
 
 	{
-		"lukas-reineke/indent-blankline.nvim",
+		"pmizio/typescript-tools.nvim",
+		dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig", "bobrown101/asset-bender.nvim" },
+		event = { "BufReadPost *.ts", "BufReadPost *.js", "BufReadPost *.tsx", "BufReadPost *.jsx" },
 		config = function()
-			vim.opt.listchars:append("space:⋅")
-
-			require("indent_blankline").setup({})
+			require("lsp")
 		end,
 	},
 })
 
+vim.lsp.set_log_level("trace")
+
 require("settings")
-require("lsp")
+require("theme")
 require("formatter-config")

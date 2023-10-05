@@ -1,139 +1,64 @@
-local util = require("lspconfig/util")
-
-function get_npm_path()
-	return vim.env.NPM_PATH
-end
-
-function getLogPath()
-	return "~/.cache/nvim/tsserver"
-	-- return vim.lsp.get_log_path()
-end
-
-function getTsserverPath()
-	return vim.env.TSSERVER_PATH
-end
-
-local customPublishDiagnosticFunction = function(_, result, ctx, config)
-	local filter = function(fun, t)
-		local res = {}
-		for _, item in ipairs(t) do
-			if fun(item) then
-				res[#res + 1] = item
-			end
-		end
-
-		return res
-	end
-	local raw_diagnostics = result.diagnostics
-
-	local filtered_diagnostics = filter(function(diagnostic)
-		local diagnostic_code = diagnostic.code
-		local diagnostic_source = diagnostic.source
-		return not (diagnostic_code == 7016 and diagnostic_source == "typescript")
-	end, raw_diagnostics)
-
-	result.diagnostics = filtered_diagnostics
-
-	return vim.lsp.diagnostic.on_publish_diagnostics(_, result, ctx, config)
-end
-
-local on_attach = function(client, bufnr) end
-
-local capabilities = require("cmp_nvim_lsp").default_capabilities()
-
--- local isHubspotMachine = getIsHubspotMachine()
-local isHubspotMachine = true
-
-if isHubspotMachine then
-	local tsserverpath = getTsserverPath()
-	require("typescript").setup({
-		disable_commands = false, -- prevent the plugin from creating Vim commands
-		debug = false, -- enable debug logging for commands
-		go_to_source_definition = {
-			fallback = true, -- fall back to standard LSP definition on failure
+-- local util = require("lspconfig/util")
+--
+require("neodev").setup({})
+-- example to setup lua_ls and enable call snippets
+require("lspconfig").lua_ls.setup({
+	settings = {
+		Lua = {
+			completion = {
+				callSnippet = "Replace",
+			},
 		},
-		server = { -- pass options to lspconfig's setup method
-			flags = { debounce_text_changes = 500 },
-			cmd = {
-				"typescript-language-server",
-				"--log-level", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
-				"4",
-				"--stdio",
-			},
-			on_attach = on_attach,
-			root_dir = util.root_pattern(".git"),
-			-- handlers = {
-			-- ["textDocument/publishDiagnostics"] = vim.lsp.with(customPublishDiagnosticFunction, {}),
-			-- },
-			init_options = {
-				hostInfo = "neovim",
-				masTsServerMemory = 16384,
-				npmLocation = get_npm_path(),
-				disableAutomaticTypingAcquisition = true,
-				tsserver = {
-					logDirectory = getLogPath(),
-					-- logVerbosity?: 'off' | 'terse' | 'normal' | 'requestTime' | 'verbose';
-					logVerbosity = "verbose",
-					path = tsserverpath,
-					lazyConfiguredProjectsFromExternalProject = true,
-				},
-			},
-			filetypes = {
-				"javascript",
-				"javascriptreact",
-				"javascript.jsx",
-				"typescript",
-				"typescriptreact",
-				"typescript.tsx",
-			},
-			capabilities = capabilities,
-		},
-	})
-	-- require("lspconfig").tsserver.setup({
-	-- 	flags = { debounce_text_changes = 500 },
-	-- 	cmd = {
-	-- 		"typescript-language-server",
-	-- 		"--log-level", -- A number indicating the log level (4 = log, 3 = info, 2 = warn, 1 = error). Defaults to `2`.
-	-- 		"4",
-	-- 		"--stdio",
-	-- 	},
-	-- 	on_attach = on_attach,
-	-- 	root_dir = util.root_pattern(".git"),
-	-- 	-- handlers = {
-	-- 	-- ["textDocument/publishDiagnostics"] = vim.lsp.with(customPublishDiagnosticFunction, {}),
-	-- 	-- },
-	-- 	init_options = {
-	-- 		hostInfo = "neovim",
-	-- 		masTsServerMemory = 16384,
-	-- 		npmLocation = get_npm_path(),
-	-- 		disableAutomaticTypingAcquisition = true,
-	-- 		tsserver = {
-	-- 			logDirectory = getLogPath(),
-	-- 			-- logVerbosity?: 'off' | 'terse' | 'normal' | 'requestTime' | 'verbose';
-	-- 			logVerbosity = "verbose",
-	-- 			path = tsserverpath,
-	-- 			lazyConfiguredProjectsFromExternalProject = true,
-	-- 		},
-	-- 	},
-	-- 	filetypes = {
-	-- 		"javascript",
-	-- 		"javascriptreact",
-	-- 		"javascript.jsx",
-	-- 		"typescript",
-	-- 		"typescriptreact",
-	-- 		"typescript.tsx",
-	-- 	},
-	-- 	capabilities = capabilities,
-	-- })
-else
-	require("lspconfig").tsserver.setup({})
-end
+	},
+})
 
--- npm install -g graphql-language-service-cli
--- require'lspconfig'.graphql.setup {}
+local tsserverpath = vim.env.TSSERVER_PATH
+print("tsserverpath being calculated now: " .. tsserverpath)
+require("typescript-tools").setup({
+	settings = {
+		-- spawn additional tsserver instance to calculate diagnostics on it
+		separate_diagnostic_server = true,
+		-- "change"|"insert_leave" determine when the client asks the server about diagnostic
+		publish_diagnostic_on = "insert_leave",
+		-- array of strings("fix_all"|"add_missing_imports"|"remove_unused"|
+		-- "remove_unused_imports"|"organize_imports") -- or string "all"
+		-- to include all supported code actions
+		-- specify commands exposed as code_actions
+		expose_as_code_action = {},
+		-- string|nil - specify a custom path to `tsserver.js` file, if this is nil or file under path
+		-- not exists then standard path resolution strategy is applied
 
--- yarn global add yaml-language-server
-require("lspconfig").yamlls.setup({})
+		tsserver_path = tsserverpath,
+		tsserver_logs = "terse",
+		-- specify a list of plugins to load by tsserver, e.g., for support `styled-components`
+		-- (see 💅 `styled-components` support section)
+		tsserver_plugins = {},
+		-- this value is passed to: https://nodejs.org/api/cli.html#--max-old-space-sizesize-in-megabytes
+		-- memory limit in megabytes or "auto"(basically no limit)
+		tsserver_max_memory = "auto",
+		-- described below
+		tsserver_format_options = {},
+		tsserver_file_preferences = {},
+		-- mirror of VSCode's `typescript.suggest.completeFunctionCalls`
+		complete_function_calls = false,
+		include_completions_with_insert_text = true,
+		-- CodeLens
+		-- WARNING: Experimental feature also in VSCode, because it might hit performance of server.
+		-- possible values: ("off"|"all"|"implementations_only"|"references_only")
+		code_lens = "off",
+		-- by default code lenses are displayed on all referencable values and for some of you it can
+		-- be too much this option reduce count of them by removing member references from lenses
+		disable_member_code_lens = true,
+	},
+	on_attach = function()
+		require("asset-bender").check_start_javascript_lsp()
+	end,
+})
+
+-- FAQ
+-- [ERROR][2022-02-22 11:10:04] ...lsp/handlers.lua:454 "[tsserver] /bin/sh: /usr/local/Cellar/node/17.5.0/bin/npm: No such file or directory\n"
+--    ln -s (which npm) /usr/local/Cellar/node/17.5.0/bin/npm
+--
 
 vim.lsp.handlers["textDocument/signatureHelp"] = vim.lsp.with(vim.lsp.handlers.signature_help, { border = "single" })
 
@@ -156,8 +81,3 @@ vim.api.nvim_set_keymap(
 	"<cmd>lua vim.lsp.buf.show_line_diagnostics({ focusable = false })<CR>",
 	{ noremap = true, silent = true }
 )
-
--- FAQ
--- [ERROR][2022-02-22 11:10:04] ...lsp/handlers.lua:454 "[tsserver] /bin/sh: /usr/local/Cellar/node/17.5.0/bin/npm: No such file or directory\n"
---    ln -s (which npm) /usr/local/Cellar/node/17.5.0/bin/npm
---

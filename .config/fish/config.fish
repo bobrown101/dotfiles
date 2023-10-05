@@ -11,7 +11,9 @@ set PATH $HOME/.local/share/bob/nvim-bin $PATH
 
 set -q XDG_CACHE_HOME; or set XDG_CACHE_HOME $HOME/.cache
 
-#set -gx TSSERVER_PATH (bpx --path hs-typescript)
+set -gx TSSERVER_PATH (bpx --path hs-typescript)
+#set -gx TSSERVER_PATH "/Users/brbrown/.bpm/packages/hs-typescript/static-1-pinned-09-2023.1/"
+
 set -gx NPM_PATH (which npm)
 set -gx EDITOR nvim
 
