@@ -20,14 +20,14 @@ require("lazy").setup({
 		lazy = false, -- make sure we load this during startup if it is your main colorscheme
 		priority = 1001, -- make sure to load this before all the other start plugins
 		config = function()
-      require("tokyonight").setup({
-        style = "night", -- The theme comes in three styles, `storm`, `moon`, a darker variant `night` and `day`
-        transparent = false, -- Enable this to disable setting the background color
-        terminal_colors = true, -- Configure the colors used when opening a `:terminal` in Neovim
-        on_highlights = function(highlights, colors)
-          highlights.WinSeparator = { fg = colors.border_highlight, bg = colors.border_highlight }
-        end,
-      })
+			require("tokyonight").setup({
+				style = "night", -- The theme comes in three styles, `storm`, `moon`, a darker variant `night` and `day`
+				transparent = false, -- Enable this to disable setting the background color
+				terminal_colors = true, -- Configure the colors used when opening a `:terminal` in Neovim
+				on_highlights = function(highlights, colors)
+					highlights.WinSeparator = { fg = colors.border_highlight, bg = colors.border_highlight }
+				end,
+			})
 			vim.cmd([[colorscheme tokyonight]])
 		end,
 	},
@@ -39,7 +39,6 @@ require("lazy").setup({
 			-- options
 		},
 	},
-	"sindrets/diffview.nvim",
 	"wbthomason/packer.nvim",
 	"bobrown101/plugin-utils.nvim",
 	"bobrown101/fff.nvim",
@@ -143,60 +142,6 @@ require("lazy").setup({
 		end,
 	},
 	{
-		"folke/flash.nvim",
-		event = "VeryLazy",
-		opts = {},
-		keys = {
-			{
-				"s",
-				mode = { "n", "x", "o" },
-				function()
-					require("flash").jump({
-						search = {
-							mode = function(str)
-								return "\\<" .. str
-							end,
-						},
-					})
-				end,
-				desc = "Flash",
-			},
-			{
-				"S",
-				mode = { "n", "o", "x" },
-				function()
-					require("flash").treesitter()
-				end,
-				desc = "Flash Treesitter",
-			},
-			{
-				"r",
-				mode = "o",
-				function()
-					require("flash").remote()
-				end,
-				desc = "Remote Flash",
-			},
-			{
-				"R",
-				mode = { "o", "x" },
-				function()
-					require("flash").treesitter_search()
-				end,
-				desc = "Flash Treesitter Search",
-			},
-			{
-				"<c-s>",
-				mode = { "c" },
-				function()
-					require("flash").toggle()
-				end,
-				desc = "Toggle Flash Search",
-			},
-		},
-	},
-
-	{
 		"bobrown101/hubspot-js-utils.nvim",
 		requires = { "bobrown101/plugin-utils.nvim" },
 		config = function()
@@ -215,8 +160,6 @@ require("lazy").setup({
 		end,
 	},
 
-	"L3MON4D3/LuaSnip",
-	"saadparwaiz1/cmp_luasnip",
 	{
 		"nvim-treesitter/nvim-treesitter",
 		config = function()
@@ -230,7 +173,6 @@ require("lazy").setup({
 			})
 		end,
 	},
-	"neovim/nvim-lspconfig",
 	"onsails/lspkind-nvim",
 	"hrsh7th/cmp-nvim-lsp",
 	"hrsh7th/cmp-nvim-lua",
@@ -241,11 +183,9 @@ require("lazy").setup({
 		config = function()
 			local cmp = require("cmp")
 			local lspkind = require("lspkind")
-			--[[ vim.opt.completeopt = {"menu", "menuone", "noselect"} ]]
 			local sources = {
 				{ name = "path" },
 				{ name = "nvim_lsp" },
-				{ name = "luasnip" },
 				{ name = "buffer" },
 				{ name = "nvim_lua" },
 				{ name = "treesitter" },
@@ -253,11 +193,6 @@ require("lazy").setup({
 			}
 
 			cmp.setup({
-				snippet = {
-					expand = function(args)
-						require("luasnip").lsp_expand(args.body)
-					end,
-				},
 				mapping = {
 					["<Tab>"] = function(fallback)
 						if cmp.visible() then
@@ -285,7 +220,6 @@ require("lazy").setup({
 						vim_item.menu = ({
 							buffer = "[Buffer]",
 							nvim_lsp = "[LSP]",
-							luasnip = "[LuaSnip]",
 							nvim_lua = "[Lua]",
 							latex_symbols = "[Latex]",
 							nvim_cmp_hs_translation_source = "[Translation]",
@@ -297,8 +231,7 @@ require("lazy").setup({
 		end,
 	},
 
-	"kyazdani42/nvim-web-devicons",
-
+	"nvim-tree/nvim-web-devicons",
 	{
 		"nvim-lualine/lualine.nvim",
 		requires = { "kyazdani42/nvim-web-devicons", opt = true },
@@ -385,40 +318,12 @@ require("lazy").setup({
 			require("todo-comments").setup({})
 		end,
 	},
-	-- {
-	-- 	"jose-elias-alvarez/null-ls.nvim",
-	-- 	config = function()
-	-- 		require("null-ls").setup({
-	-- 			sources = {
-	-- 				require("null-ls").builtins.diagnostics.eslint,
-	-- 				-- require("null-ls").builtins.formatting.stylua,
-	-- 			},
-	-- 			-- you can reuse a shared lspconfig on_attach callback here
-	-- 			on_attach = function(client, bufnr)
-	-- 				if client.supports_method("textDocument/formatting") then
-	-- 					vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
-	-- 					vim.api.nvim_create_autocmd("BufWritePre", {
-	-- 						group = augroup,
-	-- 						buffer = bufnr,
-	-- 						callback = function()
-	-- 							vim.lsp.buf.format({ bufnr = bufnr })
-	-- 						end,
-	-- 					})
-	-- 				end
-	-- 			end,
-	-- 		})
-	-- 	end,
-	-- },
-
-	-- {
-	-- 	"lukas-reineke/indent-blankline.nvim",
-	-- 	config = function()
-	-- 		vim.opt.listchars:append("space:⋅")
-	--
-	-- 		require("indent_blankline").setup({})
-	-- 	end,
-	-- },
-
+	{
+		"neovim/nvim-lspconfig",
+		config = function()
+			require("lspconfig").eslint.setup({})
+		end,
+	},
 	{
 		"pmizio/typescript-tools.nvim",
 		dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig", "bobrown101/asset-bender.nvim" },
