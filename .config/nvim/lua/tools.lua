@@ -16,12 +16,20 @@ end
 
 function M.telescope_files()
 	local root = M.GitRoot()
-	require("telescope.builtin").find_files({ cwd = root })
+	require("telescope.builtin").find_files({
+		cwd = root,
+		layout_strategy = "horizontal",
+		layout_config = { width = 0.99 },
+	})
 end
 
 function M.telescope_grep()
 	local root = M.GitRoot()
-	require("telescope.builtin").live_grep({ cwd = root })
+	require("telescope.builtin").live_grep({
+		cwd = root,
+		layout_strategy = "horizontal",
+		layout_config = { width = 0.99 },
+	})
 end
 
 return M

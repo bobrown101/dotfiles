@@ -1,7 +1,7 @@
-# /Users/brbrown/.config/tmuxinator/customer-data-bulk-actions.yml
+# /Users/brbrown/.config/tmuxinator/crm-tasks-ui.yml
 
-name: customer-data-views-management
-root: ~/Developer/customer-data-views-management
+name: crm-tasks-ui
+root: ~/Developer/crm-tasks-ui
 
 # Optional tmux socket
 # socket_name: foo
@@ -45,5 +45,5 @@ root: ~/Developer/customer-data-views-management
 # attach: false
 
 windows:
-  - editor: v
-  - bender: bend yarn && bend start
+  - editor: v .
+  - server: bend reactor serve ./ --ts-watch --update
