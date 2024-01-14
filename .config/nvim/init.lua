@@ -14,42 +14,6 @@ end
 vim.opt.rtp:prepend(lazypath)
 
 require("lazy").setup({
-    -- {
-    --     "folke/noice.nvim",
-    --     event = "VeryLazy",
-    --     dependencies = {
-    --         -- if you lazy-load any plugin below, make sure to add proper `module="..."` entries
-    --         "MunifTanjim/nui.nvim",
-    --         -- OPTIONAL:
-    --         --   `nvim-notify` is only needed, if you want to use the notification view.
-    --         --   If not available, we use `mini` as the fallback
-    --         "rcarriga/nvim-notify",
-    --     },
-    --     config = function()
-    --         require("noice").setup({
-    --             cmdline = {
-    --                 enabled = true, -- enables the Noice cmdline UI
-    --                 view = "cmdline", -- view for rendering the cmdline. Change to `cmdline` to get a classic cmdline at the bottom
-    --             },
-    --             lsp = {
-    --                 -- override markdown rendering so that **cmp** and other plugins use **Treesitter**
-    --                 override = {
-    --                     ["vim.lsp.util.convert_input_to_markdown_lines"] = true,
-    --                     ["vim.lsp.util.stylize_markdown"] = true,
-    --                     ["cmp.entry.get_documentation"] = true,
-    --                 },
-    --             },
-    --             -- you can enable a preset for easier configuration
-    --             presets = {
-    --                 bottom_search = true, -- use a classic bottom cmdline for search
-    --                 command_palette = true, -- position the cmdline and popupmenu together
-    --                 long_message_to_split = true, -- long messages will be sent to a split
-    --                 inc_rename = false, -- enables an input dialog for inc-rename.nvim
-    --                 lsp_doc_border = false, -- add a border to hover docs and signature help
-    --             },
-    --         })
-    --     end,
-    -- },
     { "folke/neodev.nvim", opts = {} },
     {
         "folke/tokyonight.nvim",
@@ -205,7 +169,6 @@ require("lazy").setup({
                 ensure_installed = "all",
                 ignore_install = { "haskell" },
                 highlight = { enable = true },
-                context_commentstring = { enable = true },
             })
         end,
     },
@@ -313,32 +276,19 @@ require("lazy").setup({
             })
         end,
     },
-
+    {
+        "JoosepAlviste/nvim-ts-context-commentstring",
+        config = function()
+            require("ts_context_commentstring").setup({
+                enable_autocmd = false,
+            })
+        end,
+    },
     {
         "numToStr/Comment.nvim",
         config = function()
             require("Comment").setup({
                 pre_hook = require("ts_context_commentstring.integrations.comment_nvim").create_pre_hook(),
-            })
-        end,
-    },
-    {
-        "JoosepAlviste/nvim-ts-context-commentstring",
-        config = function()
-            require("nvim-treesitter.configs").setup({
-                context_commentstring = {
-                    enable = true,
-                    enable_autocmd = false,
-                },
-                incremental_selection = {
-                    enable = true,
-                    keymaps = {
-                        init_selection = "<CR>", -- maps in normal mode to init the node/scope selection
-                        node_decremental = "0", -- decrement to the previous node
-                        node_incremental = "9", -- increment to the upper named parent
-                        scope_incremental = "-", -- increment to the upper scope (as defined in locals.scm)
-                    },
-                },
             })
         end,
     },
@@ -349,8 +299,6 @@ require("lazy").setup({
             require("alpha").setup(require("alpha.themes.startify").config)
         end,
     },
-    -- "mhartington/formatter.nvim",
-
     {
         "nvim-telescope/telescope.nvim",
         config = function()
@@ -410,4 +358,3 @@ require("lazy").setup({
 vim.lsp.set_log_level("trace")
 
 require("settings")
--- require("formatter-config")
