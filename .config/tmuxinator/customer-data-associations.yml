@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/customer-data-associations.yml
 
 name: customer-data-associations
-root: ~/Developer/customer-data-associations
+root: ~/src/customer-data-associations
 
 # Optional tmux socket
 # socket_name: foo

@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/settings-ui-multi-currency.yml
 
 name: settings-ui-multi-currency
-root: ~/Developer/settings-ui-multi-currency
+root: ~/src/settings-ui-multi-currency
 
 # Optional tmux socket
 # socket_name: foo

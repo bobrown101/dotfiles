@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/crm-settings.yml
 
 name: crm-settings
-root: ~/Developer/crm-settings
+root: ~/src/crm-settings
 
 # Optional tmux socket
 # socket_name: foo

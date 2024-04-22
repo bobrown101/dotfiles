@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/crm-pipeline-settings.yml
 
 name: crm-pipeline-settings
-root: ~/Developer/crm-pipeline-settings
+root: ~/src/crm-pipeline-settings
 
 # Optional tmux socket
 # socket_name: foo

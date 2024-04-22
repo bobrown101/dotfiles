@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/customer-datasets.yml
 
 name: customer-datasets
-root: ~/Developer/customer-datasets
+root: ~/src/customer-datasets
 
 # Optional tmux socket
 # socket_name: foo

@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/hubspot-apollo-client.yml
 
 name: hubspot-apollo-client
-root: ~/Developer/hubspot-apollo-client
+root: ~/src/hubspot-apollo-client
 
 # Optional tmux socket
 # socket_name: foo

@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/property-translator.yml
 
 name: property-translator
-root: ~/Developer/property-translator/FrontEnd
+root: ~/src/property-translator/FrontEnd
 
 # Optional tmux socket
 # socket_name: foo

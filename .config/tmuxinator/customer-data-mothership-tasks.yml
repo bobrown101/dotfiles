@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/customer-data-mothership-tasks.yml
 
 name: customer-data-mothership-tasks
-root: ~/Developer/customer-data-mothership-tasks/
+root: ~/src/customer-data-mothership-tasks/
 
 # Optional tmux socket
 # socket_name: foo

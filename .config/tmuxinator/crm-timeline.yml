@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/crm-timeline.yml
 
 name: crm-timeline
-root: ~/Developer/CRM/crm-timeline
+root: ~/src/CRM/crm-timeline
 
 # Optional tmux socket
 # socket_name: foo

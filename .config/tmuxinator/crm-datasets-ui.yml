@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/crm-index-ui.yml
 
 name: crm-datasets-ui
-root: ~/Developer/crm-datasets-ui
+root: ~/src/crm-datasets-ui
 
 # Optional tmux socket
 # socket_name: foo

@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/crm-index-ui.yml
 
 name: crm-index-ui
-root: ~/Developer/crm-index-ui
+root: ~/src/crm-index-ui
 
 # Optional tmux socket
 # socket_name: foo

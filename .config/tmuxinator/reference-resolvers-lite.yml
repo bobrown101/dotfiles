@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/reference-resolvers-lite.yml
 
 name: reference-resolvers-lite
-root: ~/Developer/reference-resolvers-lite/
+root: ~/src/reference-resolvers-lite/
 
 # Optional tmux socket
 # socket_name: foo

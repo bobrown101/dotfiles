@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/recycling-bin.yml
 
 name: recycling-bin
-root: ~/Developer/recycling-bin-ui
+root: ~/src/recycling-bin-ui
 
 # Optional tmux socket
 # socket_name: foo

@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/customer-data-tracking.yml
 
 name: customer-data-tracking
-root: ~/Developer/customer-data-tracking
+root: ~/src/customer-data-tracking
 
 # Optional tmux socket
 # socket_name: foo

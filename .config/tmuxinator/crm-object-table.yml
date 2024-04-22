@@ -1,7 +1,7 @@
-# /Users/brbrown/.config/tmuxinator/CRM.yml
+# /Users/brbrown/.config/tmuxinator/crm-object-table.yml
 
-name: CRM
-root: ~/src/CRM
+name: crm-object-table
+root: ~/src/crm-object-table
 
 # Optional tmux socket
 # socket_name: foo
@@ -32,7 +32,7 @@ root: ~/src/CRM
 # Pass command line options to tmux. Useful for specifying a different tmux.conf.
 # tmux_options: -f ~/.tmux.mac.conf
 
-# Change the command to call tmux.  This can be used by derivatives/wrappers like byobu.
+# Change the command to call tmux. This can be used by derivatives/wrappers like byobu.
 # tmux_command: byobu
 
 # Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
@@ -46,4 +46,4 @@ root: ~/src/CRM
 
 windows:
   - editor: v .
-  - server: echo "Not setting this up for now"
+  - bender: bend yarn && NODE_ARGS=--max_old_space_size=16384  bend reactor serve ~/src/crm-index-ui/crm-index-ui ./crm-object-table ./crm-object-table-kitchen-sink  --ts-watch --update

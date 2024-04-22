@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/onboarding-tours.yml
 
 name: onboarding-tours
-root: ~/Developer/onboarding-tours
+root: ~/src/onboarding-tours
 
 # Optional tmux socket
 # socket_name: foo

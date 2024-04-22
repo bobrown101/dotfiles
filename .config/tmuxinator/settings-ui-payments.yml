@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/settings-ui-payments.yml
 
 name: settings-ui-payments
-root: ~/Developer/settings-ui-payments
+root: ~/src/settings-ui-payments
 
 # Optional tmux socket
 # socket_name: foo

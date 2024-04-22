@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/crm-index-data-lib.yml
 
 name: crm-index-data-lib
-root: ~/Developer/crm-index-data-lib
+root: ~/src/crm-index-data-lib
 
 # Optional tmux socket
 # socket_name: foo

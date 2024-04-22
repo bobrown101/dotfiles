@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/customer-data-bulk-actions.yml
 
 name: customer-data-bulk-actions
-root: ~/Developer/customer-data-bulk-actions
+root: ~/src/customer-data-bulk-actions
 
 # Optional tmux socket
 # socket_name: foo

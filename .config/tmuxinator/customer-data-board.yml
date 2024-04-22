@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/customer-data-board.yml
 
 name: customer-data-board
-root: ~/Developer/customer-data-board
+root: ~/src/customer-data-board
 
 # Optional tmux socket
 # socket_name: foo
@@ -46,4 +46,4 @@ root: ~/Developer/customer-data-board
 
 windows:
   - editor: v .
-  - bender: bend yarn && bend reactor serve . ~/Developer/customer-datasets/datasets-ui --update
+  - bender: bend yarn && bend reactor serve . ~/src/customer-datasets/datasets-ui --update

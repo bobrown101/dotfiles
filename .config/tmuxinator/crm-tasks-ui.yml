@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/crm-tasks-ui.yml
 
 name: crm-tasks-ui
-root: ~/Developer/crm-tasks-ui
+root: ~/src/crm-tasks-ui
 
 # Optional tmux socket
 # socket_name: foo

@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/customer-data-objects.yml
 
 name: customer-data-objects
-root: ~/Developer/customer-data-objects
+root: ~/src/customer-data-objects
 
 # Optional tmux socket
 # socket_name: foo

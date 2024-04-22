@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/framework-listing-lib.yml
 
 name: framework-listing-lib
-root: ~/Developer/framework-listing-lib
+root: ~/src/framework-listing-lib
 
 # Optional tmux socket
 # socket_name: foo

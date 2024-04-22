@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/crm-sdk.yml
 
 name: crm-sdk
-root: ~/Developer/crm-sdk
+root: ~/src/crm-sdk
 
 # Optional tmux socket
 # socket_name: foo

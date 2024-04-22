@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/crm-index-view-components.yml
 
 name: crm-index-view-components
-root: ~/Developer/crm-index-view-components
+root: ~/src/crm-index-view-components
 
 # Optional tmux socket
 # socket_name: foo

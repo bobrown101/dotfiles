@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/generic-board.yml
 
 name: generic-board
-root: ~/Developer/customer-data-board
+root: ~/src/customer-data-board
 
 # Optional tmux socket
 # socket_name: foo

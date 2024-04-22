@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/customer-data-properties-kitchen-sink.yml
 
 name: customer-data-properties-kitchen-sink
-root: ~/Developer/customer-data-properties-kitchen-sink
+root: ~/src/customer-data-properties-kitchen-sink
 
 # Optional tmux socket
 # socket_name: foo

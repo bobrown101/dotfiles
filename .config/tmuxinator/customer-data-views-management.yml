@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/customer-data-bulk-actions.yml
 
 name: customer-data-views-management
-root: ~/Developer/customer-data-views-management
+root: ~/src/customer-data-views-management
 
 # Optional tmux socket
 # socket_name: foo

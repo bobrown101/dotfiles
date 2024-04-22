@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/UpgradeManagement.yml
 
 name: UpgradeManagement
-root: ~/Developer/UpgradeManagement
+root: ~/src/UpgradeManagement
 
 # Optional tmux socket
 # socket_name: foo

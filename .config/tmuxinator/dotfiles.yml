@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/dotfiles.yml
 
 name: dotfiles
-root: ~/Developer/dotfiles
+root: ~/src/dotfiles
 
 # Optional tmux socket
 # socket_name: foo

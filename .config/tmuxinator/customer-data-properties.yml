@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/customer-data-properties.yml
 
 name: customer-data-properties
-root: ~/Developer/customer-data-properties
+root: ~/src/customer-data-properties
 
 # Optional tmux socket
 # socket_name: foo

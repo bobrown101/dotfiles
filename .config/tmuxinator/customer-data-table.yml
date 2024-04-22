@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/customer-data-table.yml
 
 name: customer-data-table
-root: ~/Developer/customer-data-table
+root: ~/src/customer-data-table
 
 # Optional tmux socket
 # socket_name: foo

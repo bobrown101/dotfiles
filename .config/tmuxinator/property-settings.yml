@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/property-settings.yml
 
 name: property-settings
-root: ~/Developer/PropertySettingsUI
+root: ~/src/PropertySettingsUI
 
 # Optional tmux socket
 # socket_name: foo
@@ -46,5 +46,5 @@ root: ~/Developer/PropertySettingsUI
 
 windows:
   - editor: bend yarn && bend reactor serve --update
-  - ats: cd ~/Developer/PropertySettingsUI/acceptance-tests && bend yarn test-local-customize
+  - ats: cd ~/src/PropertySettingsUI/acceptance-tests && bend yarn test-local-customize
   - general: echo general stuff here

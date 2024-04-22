@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/apollo-link-hub-http.yml
 
 name: apollo-link-hub-http
-root: ~/Developer/apollo-link-hub-http
+root: ~/src/apollo-link-hub-http
 
 # Optional tmux socket
 # socket_name: foo

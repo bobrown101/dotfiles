@@ -1,7 +1,7 @@
 # /Users/brbrown/.config/tmuxinator/CrmMeta.yml
 
 name: CrmMeta
-root: ~/Developer/CrmMeta
+root: ~/src/CrmMeta
 
 # Optional tmux socket
 # socket_name: foo
