@@ -14,10 +14,14 @@ end
 vim.opt.rtp:prepend(lazypath)
 
 require("lazy").setup({
+    {
+        "github/copilot.vim",
+    },
     { "folke/neodev.nvim", opts = {} },
     {
         "folke/tokyonight.nvim",
         lazy = false, -- make sure we load this during startup if it is your main colorscheme
+        day_brightness = 1, -- Adjusts the brightness of the colors of the **Day** style. Number between 0 and 1, from dull to vibrant colors
         priority = 1001, -- make sure to load this before all the other start plugins
         config = function()
             require("tokyonight").setup({
@@ -90,7 +94,7 @@ require("lazy").setup({
                 g = {
                     b = {
                         function()
-                            require("git_blame").run()
+                            vim.cmd("BlameToggle")
                         end,
                         "Git Blame",
                     },
@@ -148,9 +152,20 @@ require("lazy").setup({
             require("hubspot-js-utils").setup({})
         end,
     },
-
-    "bobrown101/git_blame.nvim",
-
+    {
+        "FabijanZulj/blame.nvim",
+        config = function()
+            require("blame").setup({
+                mappings = {
+                    commit_info = "K",
+                    stack_push = "l",
+                    stack_pop = "h",
+                    show_commit = "<CR>",
+                    close = { "<esc>", "q" },
+                },
+            })
+        end,
+    },
     "nvim-lua/plenary.nvim",
     {
         "lewis6991/gitsigns.nvim",
