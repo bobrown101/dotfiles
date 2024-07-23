@@ -17,7 +17,7 @@ set -gx TSSERVER_PATH (bpx --path hs-typescript)
 set -gx NPM_PATH (which npm)
 set -gx EDITOR nvim
 
-set NODE_ARGS --max_old_space_size=8192
+set -gx NODE_ARGS --max_old_space_size=8192
 
 function brewup
   brew update; brew upgrade; brew cleanup; brew doctor
@@ -33,12 +33,7 @@ function f
     cd (cat $XDG_CACHE_HOME/fff/.fff_d)
 end
 
-# function tt
-#   git ls-tree -r --name-only HEAD | tree -f --fromfile $argv
-# end
-
 function v
-  # HS_TSSERVER_PATH=$HS_TSSERVER_PATH nvim $argv
   nvim $argv
 end
 
