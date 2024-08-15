@@ -24,7 +24,7 @@ function brewup
 end
 
 function ll
-	exa -al $argv
+	eza -al $argv
 end
 
 function f

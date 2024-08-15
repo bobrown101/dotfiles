@@ -50,99 +50,100 @@ require("lazy").setup({
         "folke/which-key.nvim",
         config = function()
             local wk = require("which-key")
-            wk.setup({})
-            wk.register({
-                d = {
-                    name = "Diagnostics",
-                    d = {
-                        function()
-                            vim.diagnostic.open_float()
-                        end,
-                        "Open diagnostic float",
-                    },
-                },
-                f = {
-                    name = "file", -- optional group name
-                    f = {
-                        function()
-                            require("tools").telescope_files()
-                        end,
-                        "Find File",
-                    },
-                },
-                s = {
-                    name = "Search",
-                    s = {
-                        function()
-                            require("tools").telescope_grep()
-                        end,
-                        "Search String",
-                    },
-                    h = {
-                        function()
-                            vim.cmd("split")
-                        end,
-                        "Split Horizontal",
-                    },
-                    v = {
-                        function()
-                            vim.cmd("vsplit")
-                        end,
-                        "Split Vertical",
-                    },
-                },
-                g = {
-                    b = {
-                        function()
-                            vim.cmd("BlameToggle")
-                        end,
-                        "Git Blame",
-                    },
-                    t = {
-                        function()
-                            require("hubspot-js-utils").test_file()
-                        end,
-                        "Test File",
-                    },
-                },
-            }, { prefix = "<leader>" })
-
-            wk.register({
-                ["_"] = {
+            wk.add({
+                { "<leader>d", group = "Diagnostics" },
+                {
+                    "<leader>dd",
                     function()
-                        vim.cmd("term ")
-                        vim.cmd("startinsert")
+                        vim.diagnostic.open_float()
                     end,
-                    "Terminal",
+                    desc = "Open diagnostic float",
                 },
-                ["-"] = {
+                { "<leader>f", group = "file" },
+                {
+                    "<leader>ff",
                     function()
-                        -- vim.cmd('term tt .. | cat')
-                        -- vim.cmd('startinsert')
-                        require("fff").start()
+                        require("tools").telescope_files()
                     end,
-                    "file browser",
+                    desc = "Find File",
                 },
-                ["<tab>"] = {
+                {
+                    "<leader>gb",
                     function()
-                        require("telescope.builtin").buffers( --
-                            require("telescope.themes").get_dropdown({
-                                sort_lastused = true,
-                                layout_config = { height = 0.3, width = 0.9 },
-                            })
-                        )
+                        vim.cmd("BlameToggle")
                     end,
-                    "open up buffers list",
+                    desc = "Git Blame",
                 },
-            }, { mode = "n" })
-            wk.register({
-                ["<esc>"] = {
+                {
+                    "<leader>gt",
                     function()
-                        vim.cmd("stopinsert")
+                        require("hubspot-js-utils").test_file()
                     end,
-                    "Escape terminal insert mode",
+                    desc = "Test File",
                 },
-            }, { mode = "t", prefix = "<esc>" })
+                { "<leader>s", group = "Search" },
+                {
+                    "<leader>sh",
+                    function()
+                        vim.cmd("split")
+                    end,
+                    desc = "Split Horizontal",
+                },
+                {
+                    "<leader>ss",
+                    function()
+                        require("tools").telescope_grep()
+                    end,
+                    desc = "Search String",
+                },
+                {
+                    "<leader>sv",
+                    function()
+                        vim.cmd("vsplit")
+                    end,
+                    desc = "Split Vertical",
+                },
+                {
+                    mode = "n",
+                    {
+                        "_",
+                        function()
+                            vim.cmd("term ")
+                            vim.cmd("startinsert")
+                        end,
+                        desc = "Terminal",
+                    },
+                    {
+                        "-",
+                        function()
+                            require("fff").start()
+                        end,
+                        desc = "Terminal",
+                    },
+                    {
+                        "<tab>",
+                        function()
+                            require("telescope.builtin").buffers( --
+                                require("telescope.themes").get_dropdown({
+                                    sort_lastused = true,
+                                    layout_config = { height = 0.3, width = 0.9 },
+                                })
+                            )
+                        end,
+                        desc = "open up buffers list",
+                    },
+                },
+                {
+                    mode = "t",
+                    {
+                        "<esc><esc>",
+                        function()
+                            vim.cmd("stopinsert")
+                        end,
+                        desc = "Escape terminal insert mode",
+                    },
+                },
+            })
         end,
     },
     {
@@ -343,7 +344,7 @@ require("lazy").setup({
             local frontendSetup = { "prettier" }
             require("conform").setup({
                 format_on_save = {
-                    timeout_ms = 500,
+                    timeout_ms = 2500,
                     lsp_fallback = true,
                 },
                 formatters_by_ft = {
