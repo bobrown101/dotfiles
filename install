@@ -1,3 +1,38 @@
-#!/bin/sh
+#!/bin/fish
 
 stow --target=$HOME . -v
+
+switch (uname)
+    case Linux
+      sudo apt update
+      sudo apt upgrade
+      sudo apt install gcc
+      rm -rf ~/neovim
+      rm -rf /usr/local/share/nvim/
+      rm -rf ~/Developer/neovim
+      git clone https://github.com/neovim/neovim ~/Developer/neovim
+      cd ~/Developer/neovim
+      curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux64.tar.gz
+      sudo rm -rf /opt/nvim
+      sudo tar -C /opt -xzf nvim-linux64.tar.gz
+      set -gx /opt/nvim-linux64/bin $PATH
+    case Darwin
+      echo Hello bradys work pc
+
+      brew update 
+      brew upgrade
+      rm -rf ~/neovim
+      rm -rf /usr/local/share/nvim/
+      rm -rf ~/Developer/neovim
+      git clone https://github.com/neovim/neovim ~/Developer/neovim
+      cd ~/Developer/neovim
+      brew install libtool automake cmake pkg-config gettext
+      make CMAKE_BUILD_TYPE=RelWithDebInfo
+      make install
+      set -gx PATH $HOME/neovim/bin $PATH
+    case '*'
+      echo ERR - your fish config did not recognize the OS type
+end
+
+nvim --headless "+Lazy! sync" +qa
+nvim -c "TSUpdate"

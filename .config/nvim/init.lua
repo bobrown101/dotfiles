@@ -36,6 +36,22 @@ require("lazy").setup({
         end,
     },
     {
+      'stevearc/oil.nvim',
+      ---@module 'oil'
+      ---@type oil.SetupOpts
+      opts = {},
+      -- Optional dependencies
+      dependencies = { { "echasnovski/mini.icons", opts = {} } },
+      -- dependencies = { "nvim-tree/nvim-web-devicons" }, -- use if prefer nvim-web-devicons
+      config = function()
+          require("oil").setup({
+	      view_options = {
+	          show_hidden = true
+	      }
+	  })
+      end
+    },
+    {
         "j-hui/fidget.nvim",
         tag = "legacy",
         event = "LspAttach",
@@ -116,9 +132,9 @@ require("lazy").setup({
                     {
                         "-",
                         function()
-                            require("fff").start()
+                            vim.cmd("Oil")
                         end,
-                        desc = "Terminal",
+                        desc = "File browser",
                     },
                     {
                         "<tab>",

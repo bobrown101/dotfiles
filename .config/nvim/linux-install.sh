@@ -1,35 +1,14 @@
-#!/bin/bash
-# cleanup
+#!/bin/bash -ex
+sudo apt update
+sudo apt upgrade
 rm -rf ~/neovim
+rm -rf /usr/local/share/nvim/
 rm -rf ~/Developer/neovim
-rm -rf ~/.local/share/nvim
-rm -rf ~/.local/state/nvim
-rm -rf /usr/local/share/nvim
-rm -rf /usr/local/bin/nvim
-rm -rf /usr/local/lib/nvim
-
-cargo install bob-nvim
-
-bob use nightly
-bob complete fish > ~/.config/fish/completions/bob.fish
-
-
-# clone neovim source
-#git clone https://github.com/neovim/neovim ~/Developer/neovim
-#cd ~/Developer/neovim ## neovim source should be located here
-
-# update node
-#nvm install node
-#npm install -g tree-sitter tree-sitter-cli neovim
-
-# update system and neovim build deps
-#sudo apt full-upgrade
-#sudo apt-get install ninja-build gettext libtool libtool-bin autoconf automake cmake g++ pkg-config unzip
-
-#make CMAKE_BUILD_TYPE=RelWithDebInfo
-#make install
-
-#export PATH="$HOME/neovim/bin:$PATH"
-export PATH=".local/share/bob/nvim-bin:$PATH"
+git clone https://github.com/neovim/neovim ~/Developer/neovim
+cd ~/Developer/neovim
+curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux64.tar.gz
+sudo rm -rf /opt/nvim
+sudo tar -C /opt -xzf nvim-linux64.tar.gz
+export PATH="$PATH:/opt/nvim-linux64/bin"
 nvim --headless "+Lazy! sync" +qa
 nvim -c "TSUpdate"
