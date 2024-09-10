@@ -78,7 +78,10 @@ require("lazy").setup({
                 {
                     "<leader>ff",
                     function()
-                        require("tools").telescope_files()
+                        require("telescope.builtin").find_files({
+                            layout_config = { height = 0.9, width = 0.9 },
+                            hidden = true,
+                        })
                     end,
                     desc = "Find File",
                 },
@@ -107,7 +110,9 @@ require("lazy").setup({
                 {
                     "<leader>ss",
                     function()
-                        require("tools").telescope_grep()
+                        require("telescope.builtin").live_grep( --
+                            { layout_config = { height = 0.9, width = 0.9 } }
+                        )
                     end,
                     desc = "Search String",
                 },
