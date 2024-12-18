@@ -15,7 +15,37 @@ vim.opt.rtp:prepend(lazypath)
 
 require("lazy").setup({
     {
+        "karb94/neoscroll.nvim",
+        opts = {},
+    },
+    {
+        "sphamba/smear-cursor.nvim",
+
+        opts = {
+            cursor_color = "#ff8800",
+            stiffness = 0.3,
+            trailing_stiffness = 0.1,
+            trailing_exponent = 3,
+            gamma = 1,
+            volume_reduction_exponent = -0.1,
+        },
+    },
+    {
         "github/copilot.vim",
+    },
+    {
+        "CopilotC-Nvim/CopilotChat.nvim",
+        branch = "main",
+        dependencies = {
+            { "zbirenbaum/copilot.lua" }, -- or github/copilot.vim
+            { "nvim-lua/plenary.nvim" }, -- for curl, log wrapper
+        },
+        build = "make tiktoken", -- Only on MacOS or Linux
+        opts = {
+            debug = true, -- Enable debugging
+            -- See Configuration section for rest
+        },
+        -- See Commands section for default commands if you want to lazy load on them
     },
     { "folke/neodev.nvim", opts = {} },
     {
@@ -61,7 +91,6 @@ require("lazy").setup({
     },
     "wbthomason/packer.nvim",
     "bobrown101/plugin-utils.nvim",
-    "bobrown101/fff.nvim",
     {
         "folke/which-key.nvim",
         config = function()
@@ -356,7 +385,6 @@ require("lazy").setup({
         end,
     },
     {
-
         "stevearc/conform.nvim",
         config = function()
             require("conform").formatters.stylua = {
