@@ -41,7 +41,10 @@ require("typescript-tools").setup({
 
         if tsserverVersionForThisFile ~= tsserverpath then
             vim.notify(
-                "You opened a file that requires a different tsserver version than what is currently being used."
+                "You opened a file that requires a different tsserver version than what is currently being used The file wants :"
+                    .. tsserverVersionForThisFile
+                    .. " and the current version is "
+                    .. tsserverpath
             )
         end
     end,
@@ -66,7 +69,8 @@ vim.api.nvim_set_keymap(
 vim.api.nvim_set_keymap("n", "<space>gr", "<cmd>lua vim.lsp.buf.references()<CR>", { noremap = true, silent = true })
 vim.api.nvim_set_keymap("n", "<space>rn", "<cmd>lua vim.lsp.buf.rename()<CR>", { noremap = true, silent = true })
 vim.api.nvim_set_keymap("n", "K", "<cmd>lua vim.lsp.buf.hover()<CR>", { noremap = true, silent = true })
-vim.api.nvim_set_keymap("n", "<space>ga", "<cmd>lua vim.lsp.buf.code_action()<CR>", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("n", "<space>ga", "<cmd>Lspsaga code_action<CR>", { noremap = true, silent = true })
+-- vim.api.nvim_set_keymap("n", "<space>ga", "<cmd>lua vim.lsp.buf.code_action()<CR>", { noremap = true, silent = true })
 vim.api.nvim_set_keymap(
     "n",
     "<space>gsd",

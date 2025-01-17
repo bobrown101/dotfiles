@@ -15,38 +15,69 @@ vim.opt.rtp:prepend(lazypath)
 
 require("lazy").setup({
     {
-        "karb94/neoscroll.nvim",
-        opts = {},
-    },
-    {
-        "sphamba/smear-cursor.nvim",
-
+        "yetone/avante.nvim",
+        event = "VeryLazy",
+        lazy = false,
+        version = false, -- set this to "*" if you want to always pull the latest change, false to update on release
         opts = {
-            cursor_color = "#ff8800",
-            stiffness = 0.3,
-            trailing_stiffness = 0.1,
-            trailing_exponent = 3,
-            gamma = 1,
-            volume_reduction_exponent = -0.1,
+            provider = "copilot",
+            -- add any opts here
         },
-    },
-    {
-        "github/copilot.vim",
-    },
-    {
-        "CopilotC-Nvim/CopilotChat.nvim",
-        branch = "main",
+        -- if you want to build from source then do `make BUILD_FROM_SOURCE=true`
+        build = "make BUILD_FROM_SOURCE=true",
+        -- build = "powershell -ExecutionPolicy Bypass -File Build.ps1 -BuildFromSource false" -- for windows
         dependencies = {
-            { "zbirenbaum/copilot.lua" }, -- or github/copilot.vim
-            { "nvim-lua/plenary.nvim" }, -- for curl, log wrapper
+            "stevearc/dressing.nvim",
+            "nvim-lua/plenary.nvim",
+            "MunifTanjim/nui.nvim",
+            --- The below dependencies are optional,
+            "hrsh7th/nvim-cmp", -- autocompletion for avante commands and mentions
+            "nvim-tree/nvim-web-devicons", -- or echasnovski/mini.icons
+            "zbirenbaum/copilot.lua", -- for providers='copilot'
+            {
+                -- support for image pasting
+                "HakonHarnes/img-clip.nvim",
+                event = "VeryLazy",
+                opts = {
+                    -- recommended settings
+                    default = {
+                        embed_image_as_base64 = false,
+                        prompt_for_file_name = false,
+                        drag_and_drop = {
+                            insert_mode = true,
+                        },
+                        -- required for Windows users
+                        use_absolute_path = true,
+                    },
+                },
+            },
+            {
+                -- Make sure to set this up properly if you have lazy=true
+                "MeanderingProgrammer/render-markdown.nvim",
+                opts = {
+                    file_types = { "markdown", "Avante" },
+                },
+                ft = { "markdown", "Avante" },
+            },
         },
-        build = "make tiktoken", -- Only on MacOS or Linux
-        opts = {
-            debug = true, -- Enable debugging
-            -- See Configuration section for rest
-        },
-        -- See Commands section for default commands if you want to lazy load on them
     },
+    -- {
+    --     "github/copilot.vim",
+    -- },
+    -- {
+    --     "CopilotC-Nvim/CopilotChat.nvim",
+    --     branch = "main",
+    --     dependencies = {
+    --         { "zbirenbaum/copilot.lua" }, -- or github/copilot.vim
+    --         { "nvim-lua/plenary.nvim" }, -- for curl, log wrapper
+    --     },
+    --     build = "make tiktoken", -- Only on MacOS or Linux
+    --     opts = {
+    --         debug = true, -- Enable debugging
+    --         -- See Configuration section for rest
+    --     },
+    --     -- See Commands section for default commands if you want to lazy load on them
+    -- },
     { "folke/neodev.nvim", opts = {} },
     {
         "folke/tokyonight.nvim",
@@ -296,7 +327,28 @@ require("lazy").setup({
             })
         end,
     },
-
+    {
+        "nvimdev/lspsaga.nvim",
+        config = function()
+            require("lspsaga").setup({
+                code_action = {
+                    extend_gitsigns = true,
+                    num_shortcut = true,
+                    keys = {
+                        quit = "<esc>",
+                        exec = "<CR>",
+                    },
+                },
+                symbol_in_winbar = {
+                    enable = false,
+                },
+            })
+        end,
+        dependencies = {
+            "nvim-treesitter/nvim-treesitter", -- optional
+            "nvim-tree/nvim-web-devicons", -- optional
+        },
+    },
     "nvim-tree/nvim-web-devicons",
     {
         "nvim-lualine/lualine.nvim",
