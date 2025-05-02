@@ -48,3 +48,6 @@ end
 
 #. ~/.hubspot/shellrc
 
+
+# uv
+fish_add_path "/Users/brbrown/.local/bin"

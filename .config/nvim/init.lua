@@ -14,53 +14,6 @@ end
 vim.opt.rtp:prepend(lazypath)
 
 require("lazy").setup({
-    {
-        "yetone/avante.nvim",
-        event = "VeryLazy",
-        lazy = false,
-        version = false, -- set this to "*" if you want to always pull the latest change, false to update on release
-        opts = {
-            provider = "copilot",
-            -- add any opts here
-        },
-        -- if you want to build from source then do `make BUILD_FROM_SOURCE=true`
-        build = "make BUILD_FROM_SOURCE=true",
-        -- build = "powershell -ExecutionPolicy Bypass -File Build.ps1 -BuildFromSource false" -- for windows
-        dependencies = {
-            "stevearc/dressing.nvim",
-            "nvim-lua/plenary.nvim",
-            "MunifTanjim/nui.nvim",
-            --- The below dependencies are optional,
-            "hrsh7th/nvim-cmp", -- autocompletion for avante commands and mentions
-            "nvim-tree/nvim-web-devicons", -- or echasnovski/mini.icons
-            "zbirenbaum/copilot.lua", -- for providers='copilot'
-            {
-                -- support for image pasting
-                "HakonHarnes/img-clip.nvim",
-                event = "VeryLazy",
-                opts = {
-                    -- recommended settings
-                    default = {
-                        embed_image_as_base64 = false,
-                        prompt_for_file_name = false,
-                        drag_and_drop = {
-                            insert_mode = true,
-                        },
-                        -- required for Windows users
-                        use_absolute_path = true,
-                    },
-                },
-            },
-            {
-                -- Make sure to set this up properly if you have lazy=true
-                "MeanderingProgrammer/render-markdown.nvim",
-                opts = {
-                    file_types = { "markdown", "Avante" },
-                },
-                ft = { "markdown", "Avante" },
-            },
-        },
-    },
     -- {
     --     "github/copilot.vim",
     -- },
@@ -428,9 +381,12 @@ require("lazy").setup({
             require("lspconfig").eslint.setup({})
         end,
     },
+{
+    url = "git@git.hubteam.com:HubSpot/bend.nvim.git"
+},
     {
         "pmizio/typescript-tools.nvim",
-        dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig", "bobrown101/asset-bender.nvim" },
+        dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig", "git@git.hubteam.com:HubSpot/bend.nvim.git" },
         event = { "BufReadPost *.ts", "BufReadPost *.js", "BufReadPost *.tsx", "BufReadPost *.jsx" },
         config = function()
             require("lsp")
@@ -462,5 +418,68 @@ require("lazy").setup({
 })
 
 vim.lsp.set_log_level("trace")
+
+-- Define the ClaudeFile command
+vim.api.nvim_create_user_command("ClaudeFile", function()
+    local file_path = vim.fn.expand("%:p")
+    local message = "I am looking at file: " .. file_path
+    local cmd = "claude " .. vim.fn.shellescape(message)
+    
+    -- Create a vertical split first
+    vim.cmd("vsplit")
+    -- Open terminal in the new split
+    vim.cmd("terminal " .. cmd)
+    -- Start in insert mode
+    vim.cmd("startinsert")
+end, {})
+
+-- Define the ClaudeLines command (works on visual selection)
+vim.api.nvim_create_user_command("ClaudeLines", function()
+    -- Get the start and end line numbers of the visual selection
+    local start_line = vim.fn.line("'<")
+    local end_line = vim.fn.line("'>")
+    local file_path = vim.fn.expand("%:p")
+    
+    local message = "I am looking at file: " .. file_path .. ", from line " .. start_line .. " to line " .. end_line
+    local cmd = "claude " .. vim.fn.shellescape(message)
+    
+    -- Create a vertical split first
+    vim.cmd("vsplit")
+    -- Open terminal in the new split
+    vim.cmd("terminal " .. cmd)
+    -- Start in insert mode
+    vim.cmd("startinsert")
+end, {range = true})
+
+-- Define the ClaudeWorkspace command (includes all open buffers)
+vim.api.nvim_create_user_command("ClaudeWorkspace", function()
+    local buffers = vim.api.nvim_list_bufs()
+    local file_list = {}
+    
+    for _, buf in ipairs(buffers) do
+        if vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].buflisted then
+            local file_path = vim.api.nvim_buf_get_name(buf)
+            if file_path and file_path ~= "" then
+                table.insert(file_list, file_path)
+            end
+        end
+    end
+    
+    local message = "I am working in a neovim workspace with these files open: "
+    local file_info = {}
+    for i, file in ipairs(file_list) do
+        table.insert(file_info, i .. ". " .. file)
+    end
+    message = message .. table.concat(file_info, "; ")
+    
+    local cmd = "claude " .. vim.fn.shellescape(message)
+    
+    -- Create a vertical split first
+    vim.cmd("vsplit")
+    -- Open terminal in the new split with the command
+    vim.cmd("term " .. cmd)
+    -- Start in insert mode
+    vim.cmd("startinsert")
+end, {})
 
 require("settings")

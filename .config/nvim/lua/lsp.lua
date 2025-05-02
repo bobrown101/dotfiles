@@ -2,8 +2,14 @@ local log = require("vim.lsp.log")
 local Job = require("plenary.job")
 local find_node_modules_ancestor = require("lspconfig").util.find_node_modules_ancestor
 local path_join = require("lspconfig").util.path.join
-local getTsServerPathForCurrentFile = require("asset-bender").getTsServerPathForCurrentFile
-local check_start_javascript_lsp = require("asset-bender").check_start_javascript_lsp
+
+local getTsServerPathForCurrentFile = require("bend").getTsServerPathForCurrentFile
+local check_start_javascript_lsp = require("bend").check_start_javascript_lsp
+
+
+-- note: you HAVE to setup asset bender before you setup typescript LSP
+local bend = require("bend")
+bend.setup()
 
 require("neodev").setup({})
 require("lspconfig").lua_ls.setup({})
@@ -58,6 +64,9 @@ require("typescript-tools").setup({
 -- vim.lsp.handlers["textDocument/signatureHelp"] = vim.lsp.with(vim.lsp.handlers.signature_help, { border = "single" })
 --
 -- vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, { border = "single" })
+--
+-- Spawning language server with cmd: \vscode-eslint-language-server` failed. The language server is either not installed, missing from PATH, or not executable.`
+-- npm install -g vscode-langservers-extracted
 
 vim.api.nvim_set_keymap("n", "<space>gd", "<cmd>lua vim.lsp.buf.definition()<CR>", { noremap = true, silent = true })
 vim.api.nvim_set_keymap(

@@ -28,7 +28,7 @@ switch (uname)
       cd ~/Developer/neovim
       brew install libtool automake cmake pkg-config gettext
       make CMAKE_BUILD_TYPE=RelWithDebInfo
-      make install
+      sudo make install
       set -gx PATH $HOME/neovim/bin $PATH
     case '*'
       echo ERR - your fish config did not recognize the OS type
