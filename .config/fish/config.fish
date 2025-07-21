@@ -20,6 +20,10 @@ function t
   tmuxinator $argv
 end
 
+function mergeMaster
+  git checkout master && git pull && git checkout - && git merge master
+end
+
 
 switch (uname)
     case Linux
