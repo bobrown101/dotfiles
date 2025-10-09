@@ -1,0 +1,8 @@
+# /Users/brbrown/.config/tmuxinator/crm-index-visualization-core.yml
+
+name: crm-index-visualization-core
+root: ~/src/crm-index-visualization-core
+
+windows:
+  - editor: v .
+  - server: ll

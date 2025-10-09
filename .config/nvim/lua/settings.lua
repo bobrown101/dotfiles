@@ -27,6 +27,12 @@ vim.o.autoindent = true
 vim.o.number = true
 vim.o.relativenumber = true
 vim.o.cursorline = true
+-- guicursor configures cursor shape and appearance for different modes:
+-- - n-v-c:block = normal/visual/command modes use block cursor
+-- - i-ci-ve:ver25 = insert modes use vertical bar (25% width)
+-- - The "Cursor/lCursor" part tells Neovim to use the Cursor highlight group
+--   which we define in init.lua with custom colors (dark red background)
+vim.o.guicursor = "n-v-c:block,i-ci-ve:ver25,r-cr:hor20,o:hor50,a:blinkwait700-blinkoff400-blinkon250-Cursor/lCursor,sm:block-blinkwait175-blinkoff150-blinkon175"
 vim.g.nobackup = true
 vim.g.nowritebackup = true
 vim.o.timeoutlen = 500

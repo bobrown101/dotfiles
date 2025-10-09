@@ -20,6 +20,7 @@ function t
   tmuxinator $argv
 end
 
+
 function mergeMaster
   git checkout master && git pull && git checkout - && git merge master
 end
@@ -43,6 +44,9 @@ switch (uname)
 	    set -gx TSSERVER_PATH (bpx --path hs-typescript)
 	    set -gx NODE_ARGS --max_old_space_size=8192
 	    
+      function brs
+        NODE_ARGS="--max_old_space_size=16384" bend reactor serve . --update --ts-watch --enable-tools $argv
+      end
 	    function pretty
 	        bend hs-prettier --write (git diff --name-only --cached) && git add (git diff --name-only --cached)
 	    end

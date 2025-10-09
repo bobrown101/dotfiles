@@ -45,6 +45,11 @@ require("lazy").setup({
                 terminal_colors = true, -- Configure the colors used when opening a `:terminal` in Neovim
                 on_highlights = function(highlights, colors)
                     highlights.WinSeparator = { fg = colors.border_highlight, bg = colors.border_highlight }
+                    highlights.CursorLine = { bg = "#ffe6e6" } -- Very light red background for cursor line
+                    -- Cursor highlight defines colors for the actual cursor block character
+                    -- This works with guicursor setting in settings.lua which references "Cursor/lCursor"
+                    -- to apply these colors to the cursor in different modes
+                    highlights.Cursor = { bg = "#cc6666", fg = "#ffffff" } -- Darker red background for cursor block
                 end,
             })
             vim.cmd([[colorscheme tokyonight]])
