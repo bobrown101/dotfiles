@@ -389,7 +389,7 @@ require("lazy").setup({
     {
         "pmizio/typescript-tools.nvim",
         dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig", "git@git.hubteam.com:HubSpot/bend.nvim.git" },
-        ft = { "typescript", "typescriptreact", "javascript", "javascriptreact" },
+        event = { "BufReadPost *.ts", "BufReadPost *.js", "BufReadPost *.tsx", "BufReadPost *.jsx" },
         config = function()
             require("lsp")
         end,
