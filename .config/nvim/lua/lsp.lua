@@ -11,8 +11,15 @@ local check_start_javascript_lsp = require("bend").check_start_javascript_lsp
 local bend = require("bend")
 bend.setup()
 
-require("neodev").setup({})
-require("lspconfig").lua_ls.setup({})
+vim.lsp.enable('eslint')
+vim.lsp.config('lua_ls', {
+    settings = {
+      Lua = {
+        workspace = { checkThirdParty = false },
+        telemetry = { enable = false },
+      },
+    }
+  })
 
 local tsserverpath = getTsServerPathForCurrentFile()
 

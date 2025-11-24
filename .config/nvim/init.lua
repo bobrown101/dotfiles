@@ -382,9 +382,6 @@ require("lazy").setup({
     },
     {
         "neovim/nvim-lspconfig",
-        config = function()
-            require("lspconfig").eslint.setup({})
-        end,
     },
 {
     url = "git@git.hubteam.com:HubSpot/bend.nvim.git"
@@ -422,7 +419,6 @@ require("lazy").setup({
     },
 })
 
-vim.lsp.set_log_level("trace")
 
 -- Define the ClaudeFile command
 vim.api.nvim_create_user_command("ClaudeFile", function()
