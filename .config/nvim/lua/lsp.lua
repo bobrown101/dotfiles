@@ -82,14 +82,9 @@ vim.api.nvim_set_keymap(
     "<cmd>lua vim.lsp.buf.implementation()<CR>",
     { noremap = true, silent = true }
 )
+-- vim.api.nvim_set_keymap("n", "<space>d", require("nvim-pretty-ts-errors").show_line_diagnostics)
 vim.api.nvim_set_keymap("n", "<space>gr", "<cmd>lua vim.lsp.buf.references()<CR>", { noremap = true, silent = true })
 vim.api.nvim_set_keymap("n", "<space>rn", "<cmd>lua vim.lsp.buf.rename()<CR>", { noremap = true, silent = true })
 vim.api.nvim_set_keymap("n", "K", "<cmd>lua vim.lsp.buf.hover()<CR>", { noremap = true, silent = true })
 vim.api.nvim_set_keymap("n", "<space>ga", "<cmd>Lspsaga code_action<CR>", { noremap = true, silent = true })
 -- vim.api.nvim_set_keymap("n", "<space>ga", "<cmd>lua vim.lsp.buf.code_action()<CR>", { noremap = true, silent = true })
-vim.api.nvim_set_keymap(
-    "n",
-    "<space>gsd",
-    "<cmd>lua vim.lsp.buf.show_line_diagnostics({ focusable = false })<CR>",
-    { noremap = true, silent = true }
-)

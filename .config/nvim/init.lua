@@ -14,24 +14,10 @@ end
 vim.opt.rtp:prepend(lazypath)
 
 require("lazy").setup({
-    -- {
-    --     "github/copilot.vim",
-    -- },
-    -- {
-    --     "CopilotC-Nvim/CopilotChat.nvim",
-    --     branch = "main",
-    --     dependencies = {
-    --         { "zbirenbaum/copilot.lua" }, -- or github/copilot.vim
-    --         { "nvim-lua/plenary.nvim" }, -- for curl, log wrapper
-    --     },
-    --     build = "make tiktoken", -- Only on MacOS or Linux
-    --     opts = {
-    --         debug = true, -- Enable debugging
-    --         -- See Configuration section for rest
-    --     },
-    --     -- See Commands section for default commands if you want to lazy load on them
-    -- },
-    { "folke/neodev.nvim", opts = {} },
+    {
+      "enochchau/nvim-pretty-ts-errors",
+      build = "npm install",
+    },
     {
         "folke/tokyonight.nvim",
         lazy = false, -- make sure we load this during startup if it is your main colorscheme
@@ -383,16 +369,50 @@ require("lazy").setup({
     {
         "neovim/nvim-lspconfig",
     },
-{
-    url = "git@git.hubteam.com:HubSpot/bend.nvim.git"
-},
-    {
-        "pmizio/typescript-tools.nvim",
-        dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig", "git@git.hubteam.com:HubSpot/bend.nvim.git" },
-        event = { "BufReadPost *.ts", "BufReadPost *.js", "BufReadPost *.tsx", "BufReadPost *.jsx" },
-        config = function()
-            require("lsp")
-        end,
+-- {
+--     url = "git@git.hubteam.com:HubSpot/bend.nvim.git"
+-- },
+--     {
+--         "pmizio/typescript-tools.nvim",
+--         dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig", "git@git.hubteam.com:HubSpot/bend.nvim.git" },
+--         event = { "BufReadPost *.ts", "BufReadPost *.js", "BufReadPost *.tsx", "BufReadPost *.jsx" },
+--         config = function()
+--             require("lsp")
+--         end,
+--     },
+   {
+      "pmizio/typescript-tools.nvim",
+      dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig", {
+          url = "git@git.hubteam.com:HubSpot/bend.nvim.git"
+      }},
+      event = { "BufReadPost *.ts", "BufReadPost *.js", "BufReadPost *.tsx", "BufReadPost *.jsx" },
+      config = function()
+          -- note: you HAVE to setup asset bender before you setup typescript LSP
+          local bend = require("bend")
+          bend.setup({ v2 = true })
+
+          require("typescript-tools").setup({
+              handlers = {
+                  ["textDocument/signatureHelp"] = vim.lsp.with(vim.lsp.handlers.signature_help, { border = "single" }),
+                  ["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, { border = "single" }),
+              },
+              settings = {
+                  tsserver_path = bend.getTsServerPathForCurrentFile(),
+              },
+          })
+          vim.api.nvim_set_keymap("n", "<space>gd", "<cmd>lua vim.lsp.buf.definition()<CR>", { noremap = true, silent = true })
+          vim.api.nvim_set_keymap(
+              "n",
+              "<space>gi",
+              "<cmd>lua vim.lsp.buf.implementation()<CR>",
+              { noremap = true, silent = true }
+          )
+          -- vim.api.nvim_set_keymap("n", "<space>d", require("nvim-pretty-ts-errors").show_line_diagnostics)
+          vim.api.nvim_set_keymap("n", "<space>gr", "<cmd>lua vim.lsp.buf.references()<CR>", { noremap = true, silent = true })
+          vim.api.nvim_set_keymap("n", "<space>rn", "<cmd>lua vim.lsp.buf.rename()<CR>", { noremap = true, silent = true })
+          vim.api.nvim_set_keymap("n", "K", "<cmd>lua vim.lsp.buf.hover()<CR>", { noremap = true, silent = true })
+          vim.api.nvim_set_keymap("n", "<space>ga", "<cmd>Lspsaga code_action<CR>", { noremap = true, silent = true })
+      end,
     },
     {
         "stevearc/conform.nvim",
@@ -452,35 +472,5 @@ vim.api.nvim_create_user_command("ClaudeLines", function()
     vim.cmd("startinsert")
 end, {range = true})
 
--- Define the ClaudeWorkspace command (includes all open buffers)
-vim.api.nvim_create_user_command("ClaudeWorkspace", function()
-    local buffers = vim.api.nvim_list_bufs()
-    local file_list = {}
-    
-    for _, buf in ipairs(buffers) do
-        if vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].buflisted then
-            local file_path = vim.api.nvim_buf_get_name(buf)
-            if file_path and file_path ~= "" then
-                table.insert(file_list, file_path)
-            end
-        end
-    end
-    
-    local message = "I am working in a neovim workspace with these files open: "
-    local file_info = {}
-    for i, file in ipairs(file_list) do
-        table.insert(file_info, i .. ". " .. file)
-    end
-    message = message .. table.concat(file_info, "; ")
-    
-    local cmd = "claude " .. vim.fn.shellescape(message)
-    
-    -- Create a vertical split first
-    vim.cmd("vsplit")
-    -- Open terminal in the new split with the command
-    vim.cmd("term " .. cmd)
-    -- Start in insert mode
-    vim.cmd("startinsert")
-end, {})
 
 require("settings")
