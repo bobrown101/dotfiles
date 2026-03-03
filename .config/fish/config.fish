@@ -45,7 +45,7 @@ switch (uname)
 	    set -gx NODE_ARGS --max_old_space_size=8192
 	    
       function brs
-        NODE_ARGS="--max_old_space_size=16384" bend reactor serve . --update --ts-watch --enable-tools $argv
+        NODE_ARGS="--max_old_space_size=16384" bend reactor serve . --update --ts-watch --enable-tools --run-tests $argv
       end
 	    function pretty
 	        bend hs-prettier --write (git diff --name-only --cached) && git add (git diff --name-only --cached)
