@@ -68,6 +68,21 @@
 # out the existing branch instead of creating a new one. When tearing down a
 # workspace, the branches are NOT deleted — they may have commits you want to push.
 #
+# MONITORING CLAUDE SESSIONS:
+#
+# When running multiple workspaces, it's hard to tell which Claude sessions need
+# your input. Two mechanisms help:
+#
+# 1. `ws check` — captures the last ~10 lines of each workspace's Claude tmux pane
+#    and pattern-matches for permission prompts, questions, idle state, or active
+#    work. Run it from any terminal to get a quick status overview.
+#
+# 2. tmux monitor-silence — set on each Claude window during ws up (30 second
+#    threshold). When Claude stops producing output (waiting for permission, asking
+#    a question, or finished), tmux highlights that window in the status bar. This
+#    only works within the same tmux session, so it's most useful when you're
+#    already attached to a workspace.
+#
 # URL MAPPING (_ws_url):
 #
 # The _ws_url function contains a hardcoded map of repo names to their local dev
@@ -113,6 +128,8 @@ function ws --description 'Workspace manager for parallel multi-repo development
             _ws_attach $argv[2..-1]
         case info
             _ws_info $argv[2..-1]
+        case check
+            _ws_check
         case help
             _ws_help
         case '*'
@@ -168,6 +185,13 @@ function _ws_help
     set_color normal
     echo ""
     echo "    Show workspace details: repos, branch, URLs, and helpful commands."
+    echo ""
+    set_color cyan
+    echo -n "  ws check"
+    set_color normal
+    echo ""
+    echo "    Check all Claude sessions across workspaces. Shows which ones need"
+    echo "    your input (permission prompts, questions) vs actively working."
     echo ""
     set_color --bold
     echo "Examples:"
@@ -262,6 +286,7 @@ function _ws_up
     tmux send-keys -t "$name:shell" "ws info $name" Enter
 
     tmux new-window -t "$name" -n claude -c "$ws_root"
+    tmux set-option -t "$name:claude" monitor-silence 30
     tmux send-keys -t "$name:claude" "claude" Enter
 
     tmux select-window -t "$name:shell"
@@ -480,6 +505,68 @@ function _ws_test_urls
             echo "$base/crm-links/static/test/test.html"
         case pulse
             echo "$base/pulse/static/test/test.html"
+    end
+end
+
+function _ws_check
+    set -l meta_dir ~/.local/share/ws
+
+    if not test -d "$meta_dir"
+        echo "No workspaces."
+        return
+    end
+
+    set -l files $meta_dir/*
+    if test (count $files) -eq 0
+        echo "No workspaces."
+        return
+    end
+
+    set -l found false
+    for meta_file in $files
+        set -l name (basename $meta_file)
+
+        if not tmux has-session -t "$name" 2>/dev/null
+            continue
+        end
+
+        set found true
+        set -l pane_content (tmux capture-pane -t "$name:claude" -p -S -10 2>/dev/null | string collect)
+
+        if test -z "$pane_content"
+            set_color brblack
+            echo "  $name  ?  could not read pane"
+            set_color normal
+            continue
+        end
+
+        if string match -qri '(do you want to|allow|would you like to|permission|approve|deny|\[Y/n\]|\(y/n\))' -- "$pane_content"
+            set_color yellow
+            echo -n "  $name"
+            set_color normal
+            echo "  needs permission"
+        else if string match -qri '(which|select|choose|pick).*\?' -- "$pane_content"
+            set_color yellow
+            echo -n "  $name"
+            set_color normal
+            echo "  asking a question"
+        else if string match -qr '❯\s*$' -- "$pane_content"
+            set_color green
+            echo -n "  $name"
+            set_color brblack
+            echo "  idle"
+            set_color normal
+        else
+            set_color blue
+            echo -n "  $name"
+            set_color brblack
+            echo "  working"
+            set_color normal
+        end
+    end
+
+    if test "$found" = false
+        echo "No running workspaces."
     end
 end
 
