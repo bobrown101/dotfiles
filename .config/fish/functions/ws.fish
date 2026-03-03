@@ -29,11 +29,18 @@
 # 3. tmux sessions — each workspace gets its own tmux session with windows for the
 #    bend serve process, a general shell, and a Claude Code instance.
 #
-# FILESYSTEM LAYOUT:
+# FILESYSTEM LAYOUT (single source of truth):
 #
-#   ~/workspaces/<name>/          Workspace root, contains all worktrees
-#   ~/workspaces/<name>/<repo>/   Git worktree for one repo (created by git worktree add)
-#   ~/.local/share/ws/<name>      Metadata file — just a newline-separated list of repo names
+#   ~/workspaces/                 All workspaces live here
+#   ~/workspaces/<name>/          Workspace root, contains worktree subdirectories
+#   ~/workspaces/<name>/<repo>/   Git worktree (has a .git file pointing to parent repo)
+#
+# There are no separate metadata files. The filesystem IS the source of truth:
+#   - Listing ~/workspaces/ gives all workspace names
+#   - Listing ~/workspaces/<name>/ gives all repos (filtered to dirs with a .git file)
+#   - Each worktree's .git file contains a gitdir: line pointing back to the parent
+#     repo (e.g., gitdir: /Users/brbrown/src/crm-index-ui/.git/worktrees/...), so
+#     we can derive the parent repo path without hardcoding ~/src/<repo>
 #
 # The repos themselves live in ~/src/<repo>/ as the "main" worktree. The workspace
 # worktrees in ~/workspaces/ are linked worktrees that share the same git history.
@@ -83,12 +90,13 @@
 #    only works within the same tmux session, so it's most useful when you're
 #    already attached to a workspace.
 #
-# URL MAPPING (_ws_url):
+# URL MAPPING (_ws_app_url / _ws_test_urls):
 #
-# The _ws_url function contains a hardcoded map of repo names to their local dev
-# URLs (the kitchen sink or app path you'd actually visit in a browser). These are
-# specific to brbrown's workflow — add new entries to the switch statement as needed.
-# The base URL (https://<name>.local.app.hubspotqa.com) comes from BEND_WORKTREE.
+# These functions contain hardcoded maps of repo names to their local dev URLs
+# (kitchen sinks, app paths, jasmine test pages). These are specific to brbrown's
+# workflow — add new entries to the switch statements as needed. The base URLs
+# come from BEND_WORKTREE: https://<name>.local.app.hubspotqa.com for apps,
+# https://<name>.local.hsappstatic.net for tests.
 #
 # EXAMPLE SESSION:
 #
@@ -216,7 +224,6 @@ function _ws_help
     echo "Layout:"
     set_color normal
     echo "  Worktrees:  ~/workspaces/<name>/<repo>/"
-    echo "  Metadata:   ~/.local/share/ws/<name>"
     echo "  Serve URL:  https://<name>.local.app.hubspotqa.com"
     echo ""
 end
@@ -232,7 +239,6 @@ function _ws_up
     set -l src ~/src
     set -l ws_root ~/workspaces/$name
     set -l branch "brbrown/$name"
-    set -l meta_dir ~/.local/share/ws
 
     if tmux has-session -t "$name" 2>/dev/null
         echo "Workspace '$name' already exists. Use 'ws attach $name' or 'ws down $name' first."
@@ -241,7 +247,6 @@ function _ws_up
 
     echo "Creating workspace: $name"
     mkdir -p $ws_root
-    mkdir -p $meta_dir
 
     for repo in $repos
         set -l repo_dir "$src/$repo"
@@ -268,8 +273,6 @@ function _ws_up
             return 1
         end
     end
-
-    printf '%s\n' $repos > "$meta_dir/$name"
 
     set -l yarn_cmds
     for repo in $repos
@@ -316,9 +319,12 @@ function _ws_down
     end
 
     set -l name $argv[1]
-    set -l src ~/src
     set -l ws_root ~/workspaces/$name
-    set -l meta_file ~/.local/share/ws/$name
+
+    if not test -d "$ws_root"
+        echo "No workspace named '$name'"
+        return 1
+    end
 
     set -l killed_count (pgrep -f "$ws_root" | count)
     if test $killed_count -gt 0
@@ -333,16 +339,16 @@ function _ws_down
         echo "Killed tmux session: $name"
     end
 
-    if test -f "$meta_file"
-        for repo in (cat "$meta_file")
-            set -l repo_dir "$src/$repo"
-            set -l wt_path "$ws_root/$repo"
-            if test -d "$wt_path"
-                git -C "$repo_dir" worktree remove "$wt_path" --force 2>/dev/null
-                echo "Removed worktree: $repo"
-            end
+    for wt_path in $ws_root/*/
+        if not test -f "$wt_path/.git"
+            continue
         end
-        rm -f "$meta_file"
+        set -l repo (basename $wt_path)
+        set -l repo_dir (_ws_parent_repo "$wt_path")
+        if test -n "$repo_dir"
+            git -C "$repo_dir" worktree remove "$wt_path" --force 2>/dev/null
+            echo "Removed worktree: $repo"
+        end
     end
 
     if test -d "$ws_root"
@@ -353,22 +359,22 @@ function _ws_down
 end
 
 function _ws_ls
-    set -l meta_dir ~/.local/share/ws
+    set -l ws_dir ~/workspaces
 
-    if not test -d "$meta_dir"
+    if not test -d "$ws_dir"
         echo "No workspaces."
         return
     end
 
-    set -l files $meta_dir/*
-    if test (count $files) -eq 0
+    set -l dirs $ws_dir/*/
+    if test (count $dirs) -eq 0
         echo "No workspaces."
         return
     end
 
-    for meta_file in $files
-        set -l name (basename $meta_file)
-        set -l repos (cat $meta_file)
+    for ws_path in $dirs
+        set -l name (basename $ws_path)
+        set -l repos (_ws_repos $ws_path)
         if tmux has-session -t "$name" 2>/dev/null
             set_color green
             echo "$name [running]"
@@ -392,14 +398,13 @@ function _ws_info
 
     set -l name $argv[1]
     set -l ws_root ~/workspaces/$name
-    set -l meta_file ~/.local/share/ws/$name
 
-    if not test -f "$meta_file"
+    if not test -d "$ws_root"
         echo "No workspace named '$name'"
         return 1
     end
 
-    set -l repos (cat $meta_file)
+    set -l repos (_ws_repos $ws_root)
     set -l branch "brbrown/$name"
 
     echo ""
@@ -435,6 +440,86 @@ function _ws_info
     echo -n "  ws ls"; set_color brblack; echo "                    list all workspaces"; set_color normal
     echo -n "  ws attach $name"; set_color brblack; echo "    rejoin this session"; set_color normal
     echo ""
+end
+
+function _ws_check
+    set -l ws_dir ~/workspaces
+
+    if not test -d "$ws_dir"
+        echo "No workspaces."
+        return
+    end
+
+    set -l dirs $ws_dir/*/
+    if test (count $dirs) -eq 0
+        echo "No workspaces."
+        return
+    end
+
+    set -l found false
+    for ws_path in $dirs
+        set -l name (basename $ws_path)
+
+        if not tmux has-session -t "$name" 2>/dev/null
+            continue
+        end
+
+        set found true
+        set -l pane_content (tmux capture-pane -t "$name:claude" -p -S -10 2>/dev/null | string collect)
+
+        if test -z "$pane_content"
+            set_color brblack
+            echo "  $name  ?  could not read pane"
+            set_color normal
+            continue
+        end
+
+        if string match -qri '(do you want to|allow|would you like to|permission|approve|deny|\[Y/n\]|\(y/n\))' -- "$pane_content"
+            set_color yellow
+            echo -n "  $name"
+            set_color normal
+            echo "  needs permission"
+        else if string match -qri '(which|select|choose|pick).*\?' -- "$pane_content"
+            set_color yellow
+            echo -n "  $name"
+            set_color normal
+            echo "  asking a question"
+        else if string match -qr '❯\s*$' -- "$pane_content"
+            set_color green
+            echo -n "  $name"
+            set_color brblack
+            echo "  idle"
+            set_color normal
+        else
+            set_color blue
+            echo -n "  $name"
+            set_color brblack
+            echo "  working"
+            set_color normal
+        end
+    end
+
+    if test "$found" = false
+        echo "No running workspaces."
+    end
+end
+
+function _ws_repos
+    set -l ws_path $argv[1]
+    for d in $ws_path/*/
+        if test -f "$d/.git"
+            basename $d
+        end
+    end
+end
+
+function _ws_parent_repo
+    set -l wt_path $argv[1]
+    if not test -f "$wt_path/.git"
+        return 1
+    end
+    set -l gitdir_line (cat "$wt_path/.git" | string replace 'gitdir: ' '')
+    string replace -r '/\.git/worktrees/.*' '' -- $gitdir_line
 end
 
 function _ws_app_url
@@ -505,68 +590,6 @@ function _ws_test_urls
             echo "$base/crm-links/static/test/test.html"
         case pulse
             echo "$base/pulse/static/test/test.html"
-    end
-end
-
-function _ws_check
-    set -l meta_dir ~/.local/share/ws
-
-    if not test -d "$meta_dir"
-        echo "No workspaces."
-        return
-    end
-
-    set -l files $meta_dir/*
-    if test (count $files) -eq 0
-        echo "No workspaces."
-        return
-    end
-
-    set -l found false
-    for meta_file in $files
-        set -l name (basename $meta_file)
-
-        if not tmux has-session -t "$name" 2>/dev/null
-            continue
-        end
-
-        set found true
-        set -l pane_content (tmux capture-pane -t "$name:claude" -p -S -10 2>/dev/null | string collect)
-
-        if test -z "$pane_content"
-            set_color brblack
-            echo "  $name  ?  could not read pane"
-            set_color normal
-            continue
-        end
-
-        if string match -qri '(do you want to|allow|would you like to|permission|approve|deny|\[Y/n\]|\(y/n\))' -- "$pane_content"
-            set_color yellow
-            echo -n "  $name"
-            set_color normal
-            echo "  needs permission"
-        else if string match -qri '(which|select|choose|pick).*\?' -- "$pane_content"
-            set_color yellow
-            echo -n "  $name"
-            set_color normal
-            echo "  asking a question"
-        else if string match -qr '❯\s*$' -- "$pane_content"
-            set_color green
-            echo -n "  $name"
-            set_color brblack
-            echo "  idle"
-            set_color normal
-        else
-            set_color blue
-            echo -n "  $name"
-            set_color brblack
-            echo "  working"
-            set_color normal
-        end
-    end
-
-    if test "$found" = false
-        echo "No running workspaces."
     end
 end
 
