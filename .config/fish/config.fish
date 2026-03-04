@@ -20,6 +20,10 @@ function t
   tmuxinator $argv
 end
 
+function tt
+  tmux attach
+end
+
 
 function mergeMaster
   git checkout master && git pull && git checkout - && git merge master

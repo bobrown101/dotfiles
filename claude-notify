@@ -1,0 +1,39 @@
+#!/usr/bin/env fish
+# claude-notify — macOS notification for Claude Code, workspace-aware
+# Used as a Notification hook to alert which workspace needs attention.
+
+set input (cat)
+
+set notification_type (echo $input | string match -rg '"notification_type"\s*:\s*"([^"]*)"')
+set cwd_val (echo $input | string match -rg '"cwd"\s*:\s*"([^"]*)"')
+
+if test "$notification_type" = auth_success
+    exit 0
+end
+
+if string match -q "$HOME/workspaces/*" -- "$cwd_val"
+    set name (string replace "$HOME/workspaces/" "" -- "$cwd_val" | string split "/" | head -1)
+else
+    set name (basename "$cwd_val")
+end
+
+if test -z "$name"
+    set name "Claude Code"
+end
+
+switch $notification_type
+    case permission_prompt
+        set message "Needs permission"
+        set sound Blow
+    case elicitation_dialog
+        set message "Has a question"
+        set sound Blow
+    case idle_prompt
+        set message "Done"
+        set sound Glass
+    case '*'
+        set message "Needs attention"
+        set sound Glass
+end
+
+osascript -e "display notification \"$message\" with title \"$name\" sound name \"$sound\""
