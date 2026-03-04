@@ -687,6 +687,74 @@ function cmdRm(args) {
 }
 
 // ---------------------------------------------------------------------------
+// Completions
+// ---------------------------------------------------------------------------
+
+function getSrcRepos() {
+  if (!fs.existsSync(SRC)) return [];
+  return fs
+    .readdirSync(SRC, { withFileTypes: true })
+    .filter(
+      (d) => d.isDirectory() && fs.existsSync(path.join(SRC, d.name, ".git"))
+    )
+    .map((d) => d.name)
+    .sort();
+}
+
+function cmdCompletions(args) {
+  const subcommand = args[0];
+  const rest = args.slice(1);
+
+  const SUBCOMMANDS = [
+    "up\tCreate a workspace",
+    "down\tTear down a workspace",
+    "add\tAdd repos to a workspace",
+    "rm\tRemove repos from a workspace",
+    "ls\tList all workspaces",
+    "attach\tAttach to a workspace tmux session",
+    "info\tShow workspace details",
+    "check\tCheck Claude session status",
+    "help\tShow help",
+  ];
+
+  if (!subcommand) {
+    SUBCOMMANDS.forEach((s) => console.log(s));
+    return;
+  }
+
+  const workspaces = allWorkspaces();
+  const srcRepos = getSrcRepos();
+
+  switch (subcommand) {
+    case "up":
+      srcRepos.forEach((r) => console.log(r));
+      break;
+    case "down":
+    case "attach":
+    case "info":
+      workspaces.forEach((w) => console.log(w));
+      break;
+    case "add":
+      if (rest.length === 0) {
+        workspaces.forEach((w) => console.log(w));
+      } else {
+        srcRepos.forEach((r) => console.log(r));
+      }
+      break;
+    case "rm": {
+      if (rest.length === 0) {
+        workspaces.forEach((w) => console.log(w));
+      } else {
+        const wsName = rest[0];
+        const wsPath = path.join(WS_DIR, wsName);
+        getRepos(wsPath).forEach((r) => console.log(r));
+      }
+      break;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // CLI router
 // ---------------------------------------------------------------------------
 
@@ -726,6 +794,9 @@ switch (command) {
     break;
   case "help":
     cmdHelp();
+    break;
+  case "--completions":
+    cmdCompletions(rest);
     break;
   default:
     console.error(`Unknown command: ${command}`);

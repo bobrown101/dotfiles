@@ -6,6 +6,7 @@ Each "workspace" is an isolated set of git worktrees served together via
 
 Source: `~/src/dotfiles/bin/ws` (Node.js, zero dependencies)
 Installed: `~/.local/bin/ws` → symlink to the source file
+Completions: `.config/fish/completions/ws.fish` → thin shim calling `command ws --completions`
 Tests: `node ~/src/dotfiles/bin/ws-test.js`
 
 Previously a Fish shell script (`.config/fish/functions/ws.fish`). Migrated to
@@ -58,6 +59,7 @@ The file is organized top-to-bottom in dependency order:
 | Filesystem helpers | `getRepos()`, `parentRepo()`, `allWorkspaces()` |
 | URL maps | `APP_PATHS` and `TEST_PATHS` objects, `appUrl()`, `testUrls()` |
 | Commands | `cmdUp`, `cmdDown`, `cmdAdd`, `cmdRm`, `cmdLs`, `cmdInfo`, `cmdAttach`, `cmdCheck`, `cmdHelp` |
+| Completions | `getSrcRepos()`, `cmdCompletions()` — outputs candidates for shell completion |
 | CLI router | `process.argv` dispatch |
 
 ## Design decisions and why
@@ -122,6 +124,12 @@ test pages). New repos need manual entries added to these objects.
 starting in the workspace root). `getRepos()` correctly ignores this because
 `.claude/` doesn't have a `.git` file. But be aware it exists when iterating
 workspace contents.
+
+### Shell completions use `command ws`
+The fish completion shim uses `command ws --completions ...` (not just `ws`) to
+bypass the fish function in `.config/fish/functions/ws.fish` and call the node
+script directly. Without `command`, the fish function intercepts the call and
+falls through to the help output.
 
 ### restartServe kills by BEND_WORKTREE, cmdDown kills by wsRoot
 `restartServe` (used by add/rm) kills with `pkill -f "BEND_WORKTREE=<name>"`
