@@ -128,6 +128,10 @@ function ws --description 'Workspace manager for parallel multi-repo development
     switch $argv[1]
         case up
             _ws_up $argv[2..-1]
+        case add
+            _ws_add $argv[2..-1]
+        case rm
+            _ws_rm $argv[2..-1]
         case down
             _ws_down $argv[2..-1]
         case ls
@@ -168,6 +172,19 @@ function _ws_help
     echo "    Create a workspace. Makes a git worktree (branch brbrown/<name>) for each"
     echo "    repo, starts bend reactor serve with BEND_WORKTREE=<name>, and launches"
     echo "    a tmux session with [serve], [shell], and [claude] windows."
+    echo ""
+    set_color cyan
+    echo -n "  ws add <name> <repo...> [--branch <branch>]"
+    set_color normal
+    echo ""
+    echo "    Add repos to a running workspace. Creates worktrees and restarts serve."
+    echo "    Branch defaults to brbrown/<name>."
+    echo ""
+    set_color cyan
+    echo -n "  ws rm <name> <repo...>"
+    set_color normal
+    echo ""
+    echo "    Remove repos from a workspace. Removes worktrees and restarts serve."
     echo ""
     set_color cyan
     echo -n "  ws down <name>"
@@ -310,6 +327,167 @@ function _ws_up
     else
         tmux attach -t "$name"
     end
+end
+
+function _ws_restart_serve
+    set -l name $argv[1]
+    set -l ws_root $argv[2]
+
+    if not tmux has-session -t "$name" 2>/dev/null
+        return
+    end
+
+    tmux send-keys -t "$name:serve" C-c
+    sleep 2
+    pkill -TERM -f "BEND_WORKTREE=$name" 2>/dev/null
+    sleep 1
+    pkill -9 -f "BEND_WORKTREE=$name" 2>/dev/null
+
+    set -l repos (_ws_repos $ws_root)
+    set -l yarn_cmds
+    for repo in $repos
+        set -a yarn_cmds "cd $ws_root/$repo && bend yarn"
+    end
+    set -a yarn_cmds "cd ~"
+    set -a yarn_cmds "BEND_WORKTREE=$name NODE_ARGS=--max_old_space_size=16384 bend reactor serve $ws_root/* --update --ts-watch --enable-tools --run-tests"
+    set -l serve_cmd (string join " && " $yarn_cmds)
+
+    tmux send-keys -t "$name:serve" "$serve_cmd" Enter
+end
+
+function _ws_add
+    if test (count $argv) -lt 2
+        echo "Usage: ws add <name> <repo...> [--branch <branch>]"
+        return 1
+    end
+
+    set -l name $argv[1]
+    set -l ws_root ~/workspaces/$name
+    set -l src ~/src
+    set -l branch "brbrown/$name"
+    set -l repos
+
+    if not test -d "$ws_root"
+        echo "No workspace named '$name'"
+        return 1
+    end
+
+    set -l i 2
+    while test $i -le (count $argv)
+        if test "$argv[$i]" = --branch
+            set i (math $i + 1)
+            if test $i -le (count $argv)
+                set branch $argv[$i]
+            else
+                echo "Error: --branch requires a value"
+                return 1
+            end
+        else
+            set -a repos $argv[$i]
+        end
+        set i (math $i + 1)
+    end
+
+    if test (count $repos) -eq 0
+        echo "Usage: ws add <name> <repo...> [--branch <branch>]"
+        return 1
+    end
+
+    set -l added
+    for repo in $repos
+        set -l repo_dir "$src/$repo"
+
+        if not test -d "$repo_dir"
+            echo "  Error: repo not found at $repo_dir"
+            return 1
+        end
+
+        set -l wt_path "$ws_root/$repo"
+
+        if test -d "$wt_path"
+            echo "  Exists: $repo (already in workspace)"
+            continue
+        end
+
+        if git -C "$repo_dir" worktree add -b "$branch" "$wt_path" 2>/dev/null
+            echo "  Created: $repo (new branch $branch)"
+            set -a added $repo
+        else if git -C "$repo_dir" worktree add "$wt_path" "$branch" 2>/dev/null
+            echo "  Created: $repo (existing branch $branch)"
+            set -a added $repo
+        else
+            echo "  Error: could not create worktree for $repo"
+            echo "  (branch '$branch' may already be checked out elsewhere)"
+            return 1
+        end
+    end
+
+    if test (count $added) -eq 0
+        echo "No repos added."
+        return
+    end
+
+    _ws_restart_serve $name $ws_root
+
+    echo ""
+    echo "Added to '$name': "(string join ", " $added)
+    set -l base "https://$name.local.app.hubspotqa.com"
+    for repo in $added
+        set -l url (_ws_app_url $repo $base)
+        if test -n "$url"
+            echo "  $repo: $url"
+        end
+    end
+end
+
+function _ws_rm
+    if test (count $argv) -lt 2
+        echo "Usage: ws rm <name> <repo...>"
+        return 1
+    end
+
+    set -l name $argv[1]
+    set -l repos $argv[2..-1]
+    set -l ws_root ~/workspaces/$name
+
+    if not test -d "$ws_root"
+        echo "No workspace named '$name'"
+        return 1
+    end
+
+    set -l removed
+    for repo in $repos
+        set -l wt_path "$ws_root/$repo"
+
+        if not test -d "$wt_path"
+            echo "  Not found: $repo (not in workspace)"
+            continue
+        end
+
+        if not test -f "$wt_path/.git"
+            echo "  Skipped: $repo (not a worktree)"
+            continue
+        end
+
+        set -l repo_dir (_ws_parent_repo "$wt_path")
+        if test -n "$repo_dir"
+            git -C "$repo_dir" worktree remove "$wt_path" --force 2>/dev/null
+            echo "  Removed: $repo"
+            set -a removed $repo
+        else
+            echo "  Error: could not resolve parent repo for $repo"
+        end
+    end
+
+    if test (count $removed) -eq 0
+        echo "No repos removed."
+        return
+    end
+
+    _ws_restart_serve $name $ws_root
+
+    echo ""
+    echo "Removed from '$name': "(string join ", " $removed)
 end
 
 function _ws_down
