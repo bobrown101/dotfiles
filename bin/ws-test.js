@@ -56,11 +56,16 @@ function createTestRepo() {
   const repoPath = path.join(SRC, TEST_REPO);
   if (fs.existsSync(repoPath)) return false;
   fs.mkdirSync(repoPath, { recursive: true });
-  spawnSync("git", ["init"], { cwd: repoPath, stdio: "pipe" });
+  spawnSync("git", ["init", "-b", "master"], { cwd: repoPath, stdio: "pipe" });
   spawnSync("git", ["commit", "--allow-empty", "-m", "init"], {
     cwd: repoPath,
     stdio: "pipe",
   });
+  spawnSync("git", ["remote", "add", "origin", repoPath], {
+    cwd: repoPath,
+    stdio: "pipe",
+  });
+  spawnSync("git", ["fetch", "origin"], { cwd: repoPath, stdio: "pipe" });
   return true;
 }
 

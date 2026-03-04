@@ -85,6 +85,15 @@ All worktree branches are `brbrown/<workspace-name>` (set via `BRANCH_PREFIX`).
 If the branch already exists, the worktree checks it out instead of creating a
 new one. Branches are NOT deleted on `ws down` — they may have unpushed commits.
 
+### Worktrees start from origin/master
+`createWorktree` runs `git fetch origin` then passes `origin/master` as the
+start-point to `git worktree add -b`. This means new branches are based on
+the latest remote master, not whatever the local `~/src/<repo>` checkout
+happens to have checked out. If the fetch fails (e.g., offline), the worktree
+add also fails — this is intentional since starting from stale code silently
+is worse. The fallback path (reusing an existing branch) does NOT reset to
+origin/master, since that branch may have unpushed work.
+
 ### Serve command uses shell glob
 The serve command uses `$wsRoot/*` (shell glob) rather than listing repo paths
 individually. Adding a worktree manually to the workspace directory automatically
@@ -160,7 +169,8 @@ The test file has zero dependencies. It runs the `ws` binary as a subprocess
 - `info` — tested against whatever workspaces exist on disk
 
 **Lifecycle test** (creates real worktrees and a tmux session):
-- Creates a temporary git repo at `~/src/ws-test-fixture`
+- Creates a temporary git repo at `~/src/ws-test-fixture` (with a self-referencing
+  `origin` remote so `git fetch origin` and `origin/master` resolve)
 - Runs: `up` → `info` → `ls` → `rm` → `add` → `down`
 - Verifies at each step: filesystem state, tmux session state, exit codes, output
 - Checks edge cases: duplicate `up`, `rm` nonexistent repo, `add` already-present repo, `--branch` flag parsing

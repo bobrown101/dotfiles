@@ -466,9 +466,11 @@ function restartServe(name, wsRoot) {
 }
 
 function createWorktree(repoDir, wtPath, branch) {
+  spawnSync("git", ["-C", repoDir, "fetch", "origin"], { stdio: "pipe" });
+
   const tryNew = spawnSync(
     "git",
-    ["-C", repoDir, "worktree", "add", "-b", branch, wtPath],
+    ["-C", repoDir, "worktree", "add", "-b", branch, wtPath, "origin/master"],
     { stdio: "pipe" }
   );
   if (tryNew.status === 0) {
