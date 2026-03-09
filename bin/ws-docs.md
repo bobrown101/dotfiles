@@ -57,7 +57,7 @@ The file is organized top-to-bottom in dependency order:
 | Shell helpers | `run()`, `runSilent()`, `tmuxHasSession()`, `pgrepCount()` |
 | Filesystem helpers | `getRepos()`, `parentRepo()`, `allWorkspaces()` |
 | URL maps | `APP_PATHS` and `TEST_PATHS` objects, `appUrl()`, `testUrls()` |
-| Commands | `cmdUp`, `cmdDown`, `cmdAdd`, `cmdRm`, `cmdLs`, `cmdInfo`, `cmdAttach`, `cmdCheck`, `cmdHelp` |
+| Commands | `cmdUp`, `cmdDown`, `cmdAdd`, `cmdRm`, `cmdLs`, `cmdInfo`, `cmdAttach`, `cmdHelp` |
 | CLI router | `process.argv` dispatch |
 
 ## Design decisions and why
@@ -97,10 +97,26 @@ was a bug in an earlier version.
 `spawnSync('sleep', ['2'])` is used instead of busy-waiting or setTimeout. This
 is synchronous by design — the tool is a sequential CLI, not an async server.
 
-### Claude window gets monitor-silence 30
-The Claude tmux window has `monitor-silence 30` set so that when Claude stops
-producing output, tmux highlights that window in the status bar. For cross-
-workspace monitoring, `ws check` captures pane content and pattern-matches.
+## Monitoring Claude sessions
+
+There are two independent mechanisms for knowing when a Claude session needs
+your attention:
+
+### claude-notify (push — automatic)
+
+`~/src/dotfiles/claude-notify` is a fish script registered as a Claude Code
+**Notification hook** in `~/.claude/settings.json`. Claude Code fires this hook
+automatically when it needs attention — permission prompts, questions, or going
+idle. The script:
+
+1. Reads JSON from stdin (Claude provides `notification_type` and `cwd`)
+2. Extracts the workspace name from the cwd path (e.g., `~/workspaces/foo/` → `foo`)
+3. Sends a macOS notification (`osascript display notification`) with the
+   workspace name and what happened ("Needs permission", "Has a question", "Done")
+4. Uses different sounds: `Blow` for prompts/questions, `Glass` for idle/done
+
+This is zero-effort — you get notified as soon as Claude stops, even if you're
+in a different app.
 
 ## Gotchas
 
@@ -148,7 +164,6 @@ The test file has zero dependencies. It runs the `ws` binary as a subprocess
 - Nonexistent workspace — every command that takes a name
 - Nonexistent repo — `up` with a repo not in `~/src`
 - `ls` — exit 0, lists all workspace dirs, shows running/stopped status
-- `check` — exit 0
 - `info` — tested against whatever workspaces exist on disk
 
 **Lifecycle test** (creates real worktrees and a tmux session):

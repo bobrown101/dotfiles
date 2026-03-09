@@ -235,14 +235,6 @@ function cmdHelp() {
     "    Show workspace details: repos, branch, URLs, and helpful commands."
   );
   console.log("");
-  console.log(cyan("  ws check"));
-  console.log(
-    "    Check all Claude sessions across workspaces. Shows which ones need"
-  );
-  console.log(
-    "    your input (permission prompts, questions) vs actively working."
-  );
-  console.log("");
   console.log(bold("Examples:"));
   console.log("");
   console.log(gray("  # Work on a table refactor across three repos"));
@@ -323,50 +315,6 @@ function cmdInfo(args) {
   console.log(`  ws ls${gray("                    list all workspaces")}`);
   console.log(`  ws attach ${name}${gray("    rejoin this session")}`);
   console.log("");
-}
-
-function cmdCheck() {
-  const names = allWorkspaces();
-  if (names.length === 0) {
-    console.log("No workspaces.");
-    return;
-  }
-
-  let found = false;
-  for (const name of names) {
-    if (!tmuxHasSession(name)) continue;
-    found = true;
-
-    const result = spawnSync(
-      "tmux",
-      ["capture-pane", "-t", `${name}:claude`, "-p", "-S", "-10"],
-      { encoding: "utf8", stdio: "pipe" }
-    );
-    const content = result.status === 0 ? result.stdout : "";
-
-    if (!content.trim()) {
-      console.log(gray(`  ${name}  ?  could not read pane`));
-      continue;
-    }
-
-    if (
-      /(?:do you want to|allow|would you like to|permission|approve|deny|\[Y\/n\]|\(y\/n\))/i.test(
-        content
-      )
-    ) {
-      console.log(`  ${yellow(name)}  needs permission`);
-    } else if (/(?:which|select|choose|pick).*\?/i.test(content)) {
-      console.log(`  ${yellow(name)}  asking a question`);
-    } else if (/❯\s*$/.test(content)) {
-      console.log(`  ${green(name)}${gray("  idle")}`);
-    } else {
-      console.log(`  ${blue(name)}${gray("  working")}`);
-    }
-  }
-
-  if (!found) {
-    console.log("No running workspaces.");
-  }
 }
 
 function cmdAttach(args) {
@@ -538,7 +486,6 @@ function cmdUp(args) {
   spawnSync("tmux", ["send-keys", "-t", `${name}:shell`, `ws info ${name}`, "Enter"], { stdio: "pipe" });
 
   spawnSync("tmux", ["new-window", "-t", name, "-n", "claude", "-c", wsRoot], { stdio: "pipe" });
-  spawnSync("tmux", ["set-option", "-t", `${name}:claude`, "monitor-silence", "30"], { stdio: "pipe" });
   spawnSync("tmux", ["send-keys", "-t", `${name}:claude`, "claude", "Enter"], { stdio: "pipe" });
 
   spawnSync("tmux", ["select-window", "-t", `${name}:shell`], { stdio: "pipe" });
@@ -720,9 +667,6 @@ switch (command) {
     break;
   case "info":
     cmdInfo(rest);
-    break;
-  case "check":
-    cmdCheck();
     break;
   case "help":
     cmdHelp();
