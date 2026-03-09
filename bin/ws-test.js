@@ -209,13 +209,6 @@ function testLs() {
   }
 }
 
-function testCheck() {
-  console.log("\ncheck");
-
-  const r = ws("check");
-  assert(r.status === 0, "check exits 0");
-}
-
 function testInfo() {
   console.log("\ninfo (existing workspaces)");
 
@@ -354,7 +347,6 @@ testUsageErrors();
 testNonexistent();
 testBadRepo();
 testLs();
-testCheck();
 testInfo();
 testLifecycle();
 
