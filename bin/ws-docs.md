@@ -6,7 +6,7 @@ Each "workspace" is an isolated set of git worktrees served together via
 
 Source: `~/src/dotfiles/bin/ws` (Node.js, zero dependencies)
 Installed: `~/.local/bin/ws` → symlink to the source file
-Completions: `.config/fish/completions/ws.fish` → thin shim calling `command ws --completions`
+Completions: `.config/fish/completions/ws.fish` (shim only — calls `command ws --completions`)
 Tests: `node ~/src/dotfiles/bin/ws-test.js`
 
 Previously a Fish shell script (`.config/fish/functions/ws.fish`). Migrated to
@@ -32,6 +32,67 @@ instances with distinct URLs. This tool solves both problems using:
 
 3. **tmux sessions** — each workspace gets a tmux session with windows for
    serve, a shell, and a Claude Code instance.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `ws up <name> <repo...>` | Create a workspace — worktrees, bend serve, tmux session |
+| `ws down <name>` | Tear down — kill processes, remove worktrees, delete directory |
+| `ws add <name> <repo...>` | Add repos to an existing workspace and restart serve |
+| `ws rm <name> <repo...>` | Remove repos from a workspace and restart serve |
+| `ws ls` | List all workspaces with running/stopped status |
+| `ws info <name>` | Show repos, branches, URLs, and useful commands |
+| `ws attach <name>` | Switch to a workspace's tmux session |
+
+**Notes:**
+- `ws up` launches three tmux windows — `serve`, `shell`, `claude` — then auto-attaches to the session
+- `ws down` removes worktrees and the workspace directory but **keeps branches** (unpushed work is safe)
+- `ws rm` removes repos from the workspace but doesn't delete branches either
+
+### `ws add --branch <branch>`
+
+By default, `ws up` and `ws add` both create worktrees on the branch
+`brbrown/<workspace-name>`. The `--branch` flag on `add` lets you override
+this for repos that need a different branch — for example, adding a repo
+where you want to check out someone else's existing branch instead of
+creating a new one.
+
+```
+ws add my-feature reporting --branch jsmith/reporting-fix
+```
+
+Things to know about `--branch`:
+
+- **Only on `add`**, not `up`. `up` creates everything on a single shared
+  branch by design; `add` is for the incremental case where you're pulling in
+  repos that need a different branch. If you need a non-default branch at
+  workspace creation time, `ws up` the workspace with your main repos, then
+  `ws add` the special-branch repos separately.
+- **Applies to all repos in the invocation.** If you need two repos on
+  different branches, run `add` twice:
+  ```
+  ws add my-feature repo-a --branch feature/alpha
+  ws add my-feature repo-b --branch feature/beta
+  ```
+- If the branch already exists in the repo, the worktree checks it out.
+  If not, it creates a new branch from `origin/master`.
+
+> See *Worktrees start from origin/master* below for details on how new branches are created.
+
+## Typical workflow
+
+```
+ws up table-refactor crm-index-ui crm-object-table
+# later, pull in a colleague's branch for a related repo
+ws add table-refactor reporting --branch jsmith/reporting-fix
+# done with the feature
+ws down table-refactor
+```
+
+1. `ws up` creates worktrees for both repos on `brbrown/table-refactor`, starts serve, and drops you into a tmux session.
+2. `ws add --branch` adds a third repo on someone else's existing branch instead of the workspace default.
+3. `ws down` tears everything down — processes, worktrees, workspace directory — but leaves all branches intact.
 
 ## Filesystem layout (the single source of truth)
 
@@ -110,8 +171,7 @@ is synchronous by design — the tool is a sequential CLI, not an async server.
 
 ## Monitoring Claude sessions
 
-There are two independent mechanisms for knowing when a Claude session needs
-your attention:
+Here's how to know when a Claude session needs attention:
 
 ### claude-notify (push — automatic)
 

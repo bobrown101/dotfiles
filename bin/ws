@@ -11,7 +11,7 @@ const os = require("os");
 
 const HOME = os.homedir();
 const SRC = path.join(HOME, "src");
-const WS_DIR = path.join(HOME, "workspaces");
+const WS_DIR = path.join(HOME, "src", "workspaces");
 const BRANCH_PREFIX = "brbrown";
 
 // ---------------------------------------------------------------------------
@@ -414,14 +414,19 @@ function restartServe(name, wsRoot) {
 }
 
 function createWorktree(repoDir, wtPath, branch) {
-  spawnSync("git", ["-C", repoDir, "fetch", "origin"], { stdio: "pipe" });
-
   const tryNew = spawnSync(
     "git",
     ["-C", repoDir, "worktree", "add", "-b", branch, wtPath, "origin/master"],
     { stdio: "pipe" }
   );
   if (tryNew.status === 0) {
+    console.log(`  Pulling latest origin/master into ${wtPath}...`);
+    const pullResult = spawnSync(
+      "git",
+      ["-C", wtPath, "pull", "--ff-only", "origin", "master"],
+      { stdio: "inherit" }
+    );
+    console.log(`  Pull exit code: ${pullResult.status}`);
     return `new branch ${branch}`;
   }
   const tryExisting = spawnSync(
@@ -430,6 +435,9 @@ function createWorktree(repoDir, wtPath, branch) {
     { stdio: "pipe" }
   );
   if (tryExisting.status === 0) {
+    spawnSync("git", ["-C", wtPath, "pull", "--ff-only", "origin", "master"], {
+      stdio: "inherit",
+    });
     return `existing branch ${branch}`;
   }
   return null;
