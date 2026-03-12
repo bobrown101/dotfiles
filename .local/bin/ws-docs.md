@@ -39,6 +39,7 @@ instances with distinct URLs. This tool solves both problems using:
 |---|---|
 | `ws up <name> <repo...>` | Create a workspace — worktrees, bend serve, tmux session |
 | `ws down <name>` | Tear down — kill processes, remove worktrees, delete directory |
+| `ws nuke <name>` | Like `down`, but also deletes local git branches (with confirmation prompt) |
 | `ws add <name> <repo...>` | Add repos to an existing workspace and restart serve |
 | `ws rm <name> <repo...>` | Remove repos from a workspace and restart serve |
 | `ws ls` | List all workspaces with running/stopped status |
@@ -48,6 +49,7 @@ instances with distinct URLs. This tool solves both problems using:
 **Notes:**
 - `ws up` launches three tmux windows — `serve`, `shell`, `claude` — then auto-attaches to the session
 - `ws down` removes worktrees and the workspace directory but **keeps branches** (unpushed work is safe)
+- `ws nuke` does everything `down` does **plus deletes local git branches** — use when you're completely done with a workspace. Prompts for confirmation before proceeding
 - `ws rm` removes repos from the workspace but doesn't delete branches either
 
 ### `ws add --branch <branch>`
@@ -119,7 +121,7 @@ The file is organized top-to-bottom in dependency order:
 | Shell helpers | `run()`, `runSilent()`, `tmuxHasSession()`, `pgrepCount()` |
 | Filesystem helpers | `getRepos()`, `parentRepo()`, `allWorkspaces()` |
 | URL maps | `APP_PATHS` and `TEST_PATHS` objects, `appUrl()`, `testUrls()` |
-| Commands | `cmdUp`, `cmdDown`, `cmdAdd`, `cmdRm`, `cmdLs`, `cmdInfo`, `cmdAttach`, `cmdHelp` |
+| Commands | `cmdUp`, `cmdDown`, `cmdNuke`, `cmdAdd`, `cmdRm`, `cmdLs`, `cmdInfo`, `cmdAttach`, `cmdHelp` + `teardownWorkspace` helper |
 | Completions | `getSrcRepos()`, `cmdCompletions()` — outputs candidates for shell completion |
 | CLI router | `process.argv` dispatch |
 

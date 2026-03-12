@@ -222,6 +222,12 @@ function cmdHelp() {
   );
   console.log("    and cleans up ~/workspaces/<name>/. Branches are kept.");
   console.log("");
+  console.log(cyan("  ws nuke <name>"));
+  console.log(
+    "    Like 'down', but also deletes local git branches."
+  );
+  console.log("    Prompts for confirmation. Use when you're completely done with a workspace.");
+  console.log("");
   console.log(cyan("  ws ls"));
   console.log(
     "    List all workspaces and whether their tmux session is running."
@@ -334,19 +340,7 @@ function cmdAttach(args) {
   }
 }
 
-function cmdDown(args) {
-  if (args.length < 1) {
-    console.error("Usage: ws down <name>");
-    process.exit(1);
-  }
-  const name = args[0];
-  const wsRoot = path.join(WS_DIR, name);
-
-  if (!fs.existsSync(wsRoot)) {
-    console.error(`No workspace named '${name}'`);
-    process.exit(1);
-  }
-
+function teardownWorkspace(name, wsRoot) {
   const count = pgrepCount(wsRoot);
   if (count > 0) {
     spawnSync("pkill", ["-TERM", "-f", wsRoot], { stdio: "pipe" });
@@ -377,8 +371,82 @@ function cmdDown(args) {
   if (fs.existsSync(wsRoot)) {
     fs.rmSync(wsRoot, { recursive: true, force: true });
   }
+}
 
+function cmdDown(args) {
+  if (args.length < 1) {
+    console.error("Usage: ws down <name>");
+    process.exit(1);
+  }
+  const name = args[0];
+  const wsRoot = path.join(WS_DIR, name);
+
+  if (!fs.existsSync(wsRoot)) {
+    console.error(`No workspace named '${name}'`);
+    process.exit(1);
+  }
+
+  teardownWorkspace(name, wsRoot);
   console.log(`Workspace '${name}' torn down.`);
+}
+
+function cmdNuke(args) {
+  if (args.length < 1) {
+    console.error("Usage: ws nuke <name>");
+    process.exit(1);
+  }
+  const name = args[0];
+  const wsRoot = path.join(WS_DIR, name);
+
+  if (!fs.existsSync(wsRoot)) {
+    console.error(`No workspace named '${name}'`);
+    process.exit(1);
+  }
+
+  const repos = getRepos(wsRoot);
+  const branchInfo = [];
+  for (const repo of repos) {
+    const wtPath = path.join(wsRoot, repo);
+    const repoDir = parentRepo(wtPath);
+    if (repoDir) {
+      const result = spawnSync("git", ["-C", wtPath, "branch", "--show-current"], {
+        encoding: "utf8",
+        stdio: "pipe",
+      });
+      const branch = result.stdout.trim();
+      if (branch) branchInfo.push({ repoDir, branch, repo });
+    }
+  }
+
+  console.log(`About to nuke workspace '${name}':`);
+  for (const { repo, branch } of branchInfo) {
+    console.log(`  ${repo} (branch: ${branch})`);
+  }
+
+  const readline = require("readline");
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  rl.question(`Nuke workspace '${name}'? [y/N] `, (answer) => {
+    rl.close();
+    if (answer.trim().toLowerCase() !== "y") {
+      console.log("Aborted.");
+      process.exit(0);
+    }
+
+    teardownWorkspace(name, wsRoot);
+
+    for (const { repoDir, branch, repo } of branchInfo) {
+      const del = spawnSync("git", ["-C", repoDir, "branch", "-D", branch], {
+        stdio: "pipe",
+      });
+      if (del.status === 0) {
+        console.log(`Deleted branch: ${branch} (${repo})`);
+      } else {
+        console.log(`Could not delete branch: ${branch} (${repo})`);
+      }
+    }
+
+    console.log(`Workspace '${name}' nuked.`);
+  });
 }
 
 function buildServeCmd(name, wsRoot, repos) {
@@ -665,6 +733,7 @@ function cmdCompletions(args) {
   const SUBCOMMANDS = [
     "up\tCreate a workspace",
     "down\tTear down a workspace",
+    "nuke\tNuke a workspace (delete everything)",
     "add\tAdd repos to a workspace",
     "rm\tRemove repos from a workspace",
     "ls\tList all workspaces",
@@ -686,6 +755,7 @@ function cmdCompletions(args) {
       srcRepos.forEach((r) => console.log(r));
       break;
     case "down":
+    case "nuke":
     case "attach":
     case "info":
       workspaces.forEach((w) => console.log(w));
@@ -735,6 +805,9 @@ switch (command) {
     break;
   case "down":
     cmdDown(rest);
+    break;
+  case "nuke":
+    cmdNuke(rest);
     break;
   case "ls":
     cmdLs();

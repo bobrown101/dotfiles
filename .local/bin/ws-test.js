@@ -8,7 +8,7 @@ const os = require("os");
 const WS = path.join(__dirname, "ws");
 const HOME = os.homedir();
 const SRC = path.join(HOME, "src");
-const WS_DIR = path.join(HOME, "workspaces");
+const WS_DIR = path.join(HOME, "src", "workspaces");
 const TEST_REPO = "ws-test-fixture";
 const TEST_WS = "ws-test-run";
 
@@ -35,6 +35,21 @@ function ws(...args) {
   const result = spawnSync(process.execPath, [WS, ...args], {
     encoding: "utf8",
     stdio: "pipe",
+    env: { ...process.env, NO_COLOR: "1" },
+  });
+  return {
+    stdout: result.stdout,
+    stderr: result.stderr,
+    status: result.status,
+    output: result.stdout + result.stderr,
+  };
+}
+
+function wsWithStdin(stdinData, ...args) {
+  const result = spawnSync(process.execPath, [WS, ...args], {
+    encoding: "utf8",
+    stdio: "pipe",
+    input: stdinData,
     env: { ...process.env, NO_COLOR: "1" },
   });
   return {
@@ -133,6 +148,10 @@ function testUsageErrors() {
   assert(down.status === 1, "down with no args exits 1");
   assert(down.output.includes("Usage: ws down"), "down shows usage");
 
+  const nuke = ws("nuke");
+  assert(nuke.status === 1, "nuke with no args exits 1");
+  assert(nuke.output.includes("Usage: ws nuke"), "nuke shows usage");
+
   const attach = ws("attach");
   assert(attach.status === 1, "attach with no args exits 1");
   assert(attach.output.includes("Usage: ws attach"), "attach shows usage");
@@ -172,6 +191,10 @@ function testNonexistent() {
   const rm = ws("rm", "ws-does-not-exist-xyz", "some-repo");
   assert(rm.status === 1, "rm exits 1");
   assert(rm.output.includes("No workspace named"), "rm shows error");
+
+  const nuke = ws("nuke", "ws-does-not-exist-xyz");
+  assert(nuke.status === 1, "nuke exits 1");
+  assert(nuke.output.includes("No workspace named"), "nuke shows error");
 }
 
 function testBadRepo() {
@@ -335,6 +358,61 @@ function testLifecycle() {
   }
 }
 
+function testNukeLifecycle() {
+  console.log("\nnuke lifecycle (up → nuke abort → nuke confirm → verify branch deleted)");
+
+  const tmuxCheck = spawnSync("tmux", ["list-sessions"], { stdio: "pipe" });
+  if (tmuxCheck.status !== 0 && !process.env.TMUX) {
+    const startResult = spawnSync("tmux", ["new-session", "-d", "-s", "ws-test-bg"], { stdio: "pipe" });
+    if (startResult.status !== 0) {
+      skip("tmux server not running, cannot test nuke lifecycle");
+      return;
+    }
+    spawnSync("tmux", ["kill-session", "-t", "ws-test-bg"], { stdio: "pipe" });
+  }
+
+  const created = createTestRepo();
+  ensureTestWsClean();
+
+  try {
+    const up = ws("up", TEST_WS, TEST_REPO);
+    assert(up.status === 0, "up exits 0");
+
+    const wsPath = path.join(WS_DIR, TEST_WS);
+    const branch = `brbrown/${TEST_WS}`;
+    const repoDir = path.join(SRC, TEST_REPO);
+
+    const branchBefore = spawnSync("git", ["-C", repoDir, "branch", "--list", branch], {
+      encoding: "utf8",
+      stdio: "pipe",
+    });
+    assert(branchBefore.stdout.trim().length > 0, "branch exists before nuke");
+
+    const nukeAbort = wsWithStdin("n\n", "nuke", TEST_WS);
+    assert(nukeAbort.status === 0, "nuke abort exits 0");
+    assert(nukeAbort.output.includes("Aborted"), "nuke abort shows aborted");
+    assert(fs.existsSync(wsPath), "workspace dir still exists after abort");
+    assert(tmuxHasSession(TEST_WS), "tmux session still exists after abort");
+
+    const nukeConfirm = wsWithStdin("y\n", "nuke", TEST_WS);
+    assert(nukeConfirm.status === 0, "nuke confirm exits 0");
+    assert(nukeConfirm.output.includes("Killed tmux session"), "nuke killed tmux");
+    assert(nukeConfirm.output.includes(`Deleted branch: ${branch}`), "nuke deleted branch");
+    assert(nukeConfirm.output.includes(`Workspace '${TEST_WS}' nuked`), "nuke confirms completion");
+    assert(!fs.existsSync(wsPath), "workspace dir removed after nuke");
+    assert(!tmuxHasSession(TEST_WS), "tmux session gone after nuke");
+
+    const branchAfter = spawnSync("git", ["-C", repoDir, "branch", "--list", branch], {
+      encoding: "utf8",
+      stdio: "pipe",
+    });
+    assert(branchAfter.stdout.trim().length === 0, "branch deleted from parent repo");
+  } finally {
+    ensureTestWsClean();
+    if (created) removeTestRepo();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Run
 // ---------------------------------------------------------------------------
@@ -349,6 +427,7 @@ testBadRepo();
 testLs();
 testInfo();
 testLifecycle();
+testNukeLifecycle();
 
 console.log(`\n${passed} passed, ${failed} failed, ${skipped} skipped\n`);
 process.exit(failed > 0 ? 1 : 0);
