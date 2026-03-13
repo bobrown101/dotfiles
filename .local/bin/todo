@@ -34,6 +34,9 @@ async function completions(argv) {
     "delete\tDelete a task",
     "edit\tUpdate a task",
     "projects\tList projects",
+    "board\tKanban board view",
+    "move\tMove task to section",
+    "sections\tManage sections",
     "help\tShow help",
   ];
 
@@ -42,7 +45,7 @@ async function completions(argv) {
     return;
   }
 
-  if (subcommand === "done" || subcommand === "delete" || subcommand === "edit") {
+  if (subcommand === "done" || subcommand === "delete" || subcommand === "edit" || subcommand === "move") {
     try {
       const tasks = await api.listTasksQuick();
       for (const t of tasks) {
@@ -50,7 +53,28 @@ async function completions(argv) {
         console.log(`${t.id}\t${label}`);
       }
     } catch {}
+    if (subcommand === "move" && argv.length >= 2) {
+      try {
+        const sections = await api.listSectionsQuick();
+        for (const s of sections) console.log(s.name);
+      } catch {}
+    }
     return;
+  }
+
+  if (subcommand === "sections") {
+    const action = argv[1];
+    if (!action) {
+      for (const a of ["list", "add", "rename", "delete"]) console.log(a);
+      return;
+    }
+    if (action === "delete" || action === "rename") {
+      try {
+        const sections = await api.listSectionsQuick();
+        for (const s of sections) console.log(`${s.id}\t${s.name}`);
+      } catch {}
+      return;
+    }
   }
 
   const prev = argv[argv.length - 1];
@@ -68,10 +92,15 @@ async function completions(argv) {
     console.log("--due");
     if (subcommand === "add") {
       console.log("--description");
+      console.log("--section");
     }
     if (subcommand === "list") {
       console.log("--filter");
     }
+  }
+
+  if (subcommand === "board" || subcommand === "sections") {
+    console.log("--project");
   }
 }
 
@@ -107,6 +136,15 @@ async function main() {
         break;
       case "projects":
         await commands.projects();
+        break;
+      case "board":
+        await commands.board(flags);
+        break;
+      case "move":
+        await commands.move(args, flags);
+        break;
+      case "sections":
+        await commands.sections(args, flags);
         break;
       case "help":
       case "-h":

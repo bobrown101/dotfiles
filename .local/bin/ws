@@ -10,7 +10,6 @@ const rest = args.slice(1);
 
 const dispatch = {
   up: commands.up,
-  add: commands.add,
   rm: commands.rm,
   down: commands.down,
   nuke: commands.nuke,

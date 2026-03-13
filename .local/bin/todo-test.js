@@ -50,6 +50,9 @@ function testHelp() {
   const r2 = todo("--help");
   assert(r2.status === 0, "--help exits 0");
   assert(r2.output.includes("todo - Todoist"), "--help shows title");
+  assert(r2.output.includes("todo board"), "help shows board");
+  assert(r2.output.includes("todo move"), "help shows move");
+  assert(r2.output.includes("todo sections"), "help shows sections");
 
   const r3 = todo("-h");
   assert(r3.status === 0, "-h exits 0");
@@ -75,6 +78,9 @@ function testCompletions() {
   assert(r.output.includes("delete"), "completions includes delete");
   assert(r.output.includes("projects"), "completions includes projects");
   assert(r.output.includes("help"), "completions includes help");
+  assert(r.output.includes("board"), "completions includes board");
+  assert(r.output.includes("move"), "completions includes move");
+  assert(r.output.includes("sections"), "completions includes sections");
 }
 
 function testCompletionsFlags() {
@@ -89,6 +95,19 @@ function testCompletionsFlags() {
   assert(r2.output.includes("--priority"), "add completions include --priority");
   assert(r2.output.includes("--due"), "add completions include --due");
   assert(r2.output.includes("--description"), "add completions include --description");
+  assert(r2.output.includes("--section"), "add completions include --section");
+
+  const r3 = todo("--completions", "board");
+  assert(r3.output.includes("--project"), "board completions include --project");
+
+  const r4 = todo("--completions", "sections");
+  assert(r4.output.includes("list"), "sections completions include list");
+  assert(r4.output.includes("add"), "sections completions include add");
+  assert(r4.output.includes("rename"), "sections completions include rename");
+  assert(r4.output.includes("delete"), "sections completions include delete");
+
+  const r5 = todo("--completions", "sections", "add");
+  assert(r5.output.includes("--project"), "sections add completions include --project");
 }
 
 function testAddNoContent() {
@@ -121,6 +140,38 @@ function testEditNoId() {
   const r = todo("edit");
   assert(r.status === 1, "edit with no id exits 1");
   assert(r.output.includes("Usage"), "edit shows usage");
+}
+
+function testBoardNoProject() {
+  console.log("\nboard with no project");
+
+  const r = todo("board");
+  assert(r.status === 1, "board with no --project exits 1");
+  assert(r.output.includes("Usage"), "board shows usage");
+}
+
+function testMoveNoArgs() {
+  console.log("\nmove with no args");
+
+  const r = todo("move");
+  assert(r.status === 1, "move with no args exits 1");
+  assert(r.output.includes("Usage"), "move shows usage");
+
+  const r2 = todo("move", "123");
+  assert(r2.status === 1, "move with only id exits 1");
+  assert(r2.output.includes("Usage"), "move with only id shows usage");
+}
+
+function testSectionsNoProject() {
+  console.log("\nsections list with no project");
+
+  const r = todo("sections");
+  assert(r.status === 1, "sections with no --project exits 1");
+  assert(r.output.includes("Usage"), "sections shows usage");
+
+  const r2 = todo("sections", "add");
+  assert(r2.status === 1, "sections add with no name exits 1");
+  assert(r2.output.includes("Usage"), "sections add shows usage");
 }
 
 function testNoToken() {
@@ -231,6 +282,80 @@ function testModelPureFunctions() {
 
   const body2 = model.buildTaskBody({ content: "Low", priority: "4" });
   assert(body2.priority === 1, "buildTaskBody: user p4 maps to API p1 (none)");
+
+  const body3 = model.buildTaskBody({ content: "Sectioned", sectionId: "sec1" });
+  assert(body3.section_id === "sec1", "buildTaskBody: sectionId maps to section_id");
+
+  const taskWithSection = model.formatTask({
+    id: "125",
+    content: "Sectioned task",
+    priority: 1,
+    project_id: "456",
+    section_id: "sec1",
+    due: null,
+    order: 3,
+  });
+  assert(taskWithSection.sectionId === "sec1", "formatTask: maps section_id");
+
+  const taskNoSection = model.formatTask({
+    id: "126",
+    content: "Unsectioned",
+    priority: 1,
+    project_id: "456",
+    due: null,
+    order: 4,
+  });
+  assert(taskNoSection.sectionId === null, "formatTask: null section_id when missing");
+
+  const section = model.formatSection({
+    id: "s1",
+    name: "Backlog",
+    project_id: "456",
+    section_order: 1,
+  });
+  assert(section.id === "s1", "formatSection: preserves id");
+  assert(section.name === "Backlog", "formatSection: preserves name");
+  assert(section.projectId === "456", "formatSection: maps project_id");
+  assert(section.order === 1, "formatSection: maps section_order");
+
+  const sid = model.resolveSectionId("backlog", [
+    { id: "s1", name: "Backlog" },
+    { id: "s2", name: "In Progress" },
+  ]);
+  assert(sid === "s1", "resolveSectionId: case insensitive match");
+
+  const sidPartial = model.resolveSectionId("prog", [
+    { id: "s1", name: "Backlog" },
+    { id: "s2", name: "In Progress" },
+  ]);
+  assert(sidPartial === "s2", "resolveSectionId: partial match");
+
+  const sidNone = model.resolveSectionId("nope", [
+    { id: "s1", name: "Backlog" },
+  ]);
+  assert(sidNone === null, "resolveSectionId: returns null on no match");
+
+  const sections = [
+    { id: "s1", name: "Backlog", order: 1 },
+    { id: "s2", name: "In Progress", order: 2 },
+  ];
+  const tasks = [
+    { sectionId: "s1", content: "a" },
+    { sectionId: "s2", content: "b" },
+    { sectionId: null, content: "c" },
+    { sectionId: "s1", content: "d" },
+  ];
+  const groups = model.groupTasksBySection(tasks, sections);
+  assert(groups.length === 3, "groupTasksBySection: 3 groups (no-section + 2 sections)");
+  assert(groups[0].section.name === "No Section", "groupTasksBySection: first group is No Section");
+  assert(groups[0].tasks.length === 1, "groupTasksBySection: 1 unsectioned task");
+  assert(groups[1].section.name === "Backlog", "groupTasksBySection: second is Backlog");
+  assert(groups[1].tasks.length === 2, "groupTasksBySection: 2 Backlog tasks");
+  assert(groups[2].section.name === "In Progress", "groupTasksBySection: third is In Progress");
+  assert(groups[2].tasks.length === 1, "groupTasksBySection: 1 In Progress task");
+
+  const emptyGroups = model.groupTasksBySection([], sections);
+  assert(emptyGroups.length === 0, "groupTasksBySection: empty when no tasks");
 }
 
 console.log("todo tests");
@@ -243,6 +368,9 @@ testAddNoContent();
 testDoneNoId();
 testDeleteNoId();
 testEditNoId();
+testBoardNoProject();
+testMoveNoArgs();
+testSectionsNoProject();
 testNoToken();
 testModelPureFunctions();
 

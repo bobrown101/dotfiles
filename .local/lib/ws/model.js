@@ -160,6 +160,37 @@ function testUrls(repo, base) {
 // Worktree operations
 // ---------------------------------------------------------------------------
 
+function getCurrentBranch(wtPath) {
+  const result = spawnSync("git", ["-C", wtPath, "branch", "--show-current"], {
+    encoding: "utf8",
+    stdio: "pipe",
+  });
+  return result.stdout.trim();
+}
+
+// Returns { success: true } or { success: false, detail: string }
+function switchBranch(wtPath, branch) {
+  const repoDir = parentRepo(wtPath);
+  if (repoDir) {
+    spawnSync("git", ["-C", repoDir, "fetch", "origin"], { stdio: "pipe" });
+  }
+
+  const checkout = spawnSync("git", ["-C", wtPath, "checkout", branch], {
+    encoding: "utf8",
+    stdio: "pipe",
+  });
+  if (checkout.status === 0) return { success: true };
+
+  const create = spawnSync(
+    "git",
+    ["-C", wtPath, "checkout", "-b", branch, "origin/master"],
+    { encoding: "utf8", stdio: "pipe" }
+  );
+  if (create.status === 0) return { success: true };
+
+  return { success: false, detail: (checkout.stderr || create.stderr).trim() };
+}
+
 // Returns { status: "new"|"existing", branch } or null on failure
 function createWorktree(repoDir, wtPath, branch) {
   const tryNew = spawnSync(
@@ -377,6 +408,8 @@ module.exports = {
   getSrcRepos,
   appUrl,
   testUrls,
+  getCurrentBranch,
+  switchBranch,
   createWorktree,
   removeWorktree,
   buildServeCmd,

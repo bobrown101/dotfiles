@@ -118,6 +118,41 @@ function listProjectsQuick() {
   return request("GET", "/api/v1/projects", null, { timeout: 3000 }).then((d) => d.results || []);
 }
 
+function listSections(params) {
+  const qs = params
+    ? "?" +
+      Object.entries(params)
+        .filter(([, v]) => v != null)
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+        .join("&")
+    : "";
+  return request("GET", `/api/v1/sections${qs}`).then((d) => d.results || d);
+}
+
+function getSection(id) {
+  return request("GET", `/api/v1/sections/${id}`);
+}
+
+function createSection(body) {
+  return request("POST", "/api/v1/sections", body);
+}
+
+function updateSection(id, body) {
+  return request("POST", `/api/v1/sections/${id}`, body);
+}
+
+function deleteSection(id) {
+  return request("DELETE", `/api/v1/sections/${id}`);
+}
+
+function listSectionsQuick() {
+  return request("GET", "/api/v1/sections", null, { timeout: 3000 }).then((d) => d.results || d);
+}
+
+function moveTask(id, body) {
+  return request("POST", `/api/v1/tasks/${id}/move`, body);
+}
+
 module.exports = {
   listTasks,
   getTask,
@@ -129,4 +164,11 @@ module.exports = {
   listCompletedTasks,
   listTasksQuick,
   listProjectsQuick,
+  listSections,
+  getSection,
+  createSection,
+  updateSection,
+  deleteSection,
+  listSectionsQuick,
+  moveTask,
 };

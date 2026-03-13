@@ -4,6 +4,37 @@ const model = require("./model");
 const view = require("./view");
 
 // ---------------------------------------------------------------------------
+// helpers
+// ---------------------------------------------------------------------------
+
+function parseRepoArgs(args, defaultBranch) {
+  return args.map((arg) => {
+    const idx = arg.indexOf(":");
+    if (idx === -1) return { repo: arg, branch: defaultBranch };
+    return { repo: arg.substring(0, idx), branch: arg.substring(idx + 1) };
+  });
+}
+
+function ensureTmuxAndAttach(name, wsRoot) {
+  if (!model.tmuxHasSession(name)) {
+    const repos = model.getRepos(wsRoot);
+    const serveCmd = model.buildServeCmd(name, wsRoot, repos);
+    model.tmuxCreateSession(name, wsRoot, serveCmd);
+  }
+  model.tmuxAttachOrSwitch(name);
+}
+
+function validateReposExist(specs) {
+  for (const spec of specs) {
+    const repoDir = path.join(model.SRC, spec.repo);
+    if (!fs.existsSync(repoDir)) {
+      view.renderError(`  Error: repo not found at ${repoDir}`);
+      process.exit(1);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // help
 // ---------------------------------------------------------------------------
 
@@ -42,19 +73,21 @@ function cmdInfo(args) {
   }
 
   const repos = model.getRepos(wsRoot);
-  const branch = `${model.BRANCH_PREFIX}/${name}`;
   const appBase = `https://${name}.local.app.hubspotqa.com`;
   const testBase = `https://${name}.local.hsappstatic.net`;
 
   view.renderInfo({
     name,
     root: wsRoot,
-    branch,
-    repos: repos.map((repo) => ({
-      name: repo,
-      appUrl: model.appUrl(repo, appBase),
-      testUrls: model.testUrls(repo, testBase),
-    })),
+    repos: repos.map((repo) => {
+      const wtPath = path.join(wsRoot, repo);
+      return {
+        name: repo,
+        branch: model.getCurrentBranch(wtPath),
+        appUrl: model.appUrl(repo, appBase),
+        testUrls: model.testUrls(repo, testBase),
+      };
+    }),
   });
 }
 
@@ -146,53 +179,31 @@ function cmdNuke(args) {
 }
 
 // ---------------------------------------------------------------------------
-// up
+// up (create or update)
 // ---------------------------------------------------------------------------
 
-function cmdUp(args) {
-  if (args.length < 2) {
-    view.renderError("Usage: ws up <name> <repo...>");
-    process.exit(1);
-  }
-
-  const name = args[0];
-  const repos = args.slice(1);
-  const wsRoot = path.join(model.WS_DIR, name);
-  const branch = `${model.BRANCH_PREFIX}/${name}`;
-
-  if (model.tmuxHasSession(name)) {
-    view.renderError(
-      `Workspace '${name}' already exists. Use 'ws attach ${name}' or 'ws down ${name}' first.`
-    );
-    process.exit(1);
-  }
-
+function createWorkspace(name, wsRoot, repoSpecs) {
   console.log(`Creating workspace: ${name}`);
   fs.mkdirSync(wsRoot, { recursive: true });
 
-  for (const repo of repos) {
-    const repoDir = path.join(model.SRC, repo);
-    if (!fs.existsSync(repoDir)) {
-      view.renderError(`  Error: repo not found at ${repoDir}`);
-      process.exit(1);
-    }
-    const wtPath = path.join(wsRoot, repo);
-    if (fs.existsSync(wtPath)) {
-      console.log(`  Exists: ${repo}`);
-      continue;
-    }
-    const result = model.createWorktree(repoDir, wtPath, branch);
+  for (const spec of repoSpecs) {
+    const repoDir = path.join(model.SRC, spec.repo);
+    const wtPath = path.join(wsRoot, spec.repo);
+    const result = model.createWorktree(repoDir, wtPath, spec.branch);
     if (result) {
-      console.log(`  Created: ${repo} (${result.status} branch ${result.branch})`);
+      console.log(
+        `  Created: ${spec.repo} (${result.status} branch ${result.branch})`
+      );
     } else {
-      view.renderError(`  Error: could not create worktree for ${repo}`);
+      view.renderError(`  Error: could not create worktree for ${spec.repo}`);
       view.renderError(
-        `  (branch '${branch}' may already be checked out elsewhere)`
+        `  (branch '${spec.branch}' may already be checked out elsewhere)`
       );
       process.exit(1);
     }
   }
 
+  const repos = repoSpecs.map((s) => s.repo);
   const serveCmd = model.buildServeCmd(name, wsRoot, repos);
   model.tmuxCreateSession(name, wsRoot, serveCmd);
 
@@ -202,87 +213,114 @@ function cmdUp(args) {
     url: model.appUrl(repo, base),
   }));
   view.renderWorkspaceReady(name, repoUrls);
-
   model.tmuxAttachOrSwitch(name);
 }
 
-// ---------------------------------------------------------------------------
-// add
-// ---------------------------------------------------------------------------
-
-function cmdAdd(args) {
-  if (args.length < 2) {
-    view.renderError("Usage: ws add <name> <repo...> [--branch <branch>]");
-    process.exit(1);
-  }
-
-  const name = args[0];
-  const wsRoot = path.join(model.WS_DIR, name);
-  let branch = `${model.BRANCH_PREFIX}/${name}`;
-  const repos = [];
-
-  if (!fs.existsSync(wsRoot)) {
-    view.renderError(`No workspace named '${name}'`);
-    process.exit(1);
-  }
-
-  for (let i = 1; i < args.length; i++) {
-    if (args[i] === "--branch") {
-      i++;
-      if (i >= args.length) {
-        view.renderError("Error: --branch requires a value");
-        process.exit(1);
-      }
-      branch = args[i];
-    } else {
-      repos.push(args[i]);
-    }
-  }
-
-  if (repos.length === 0) {
-    view.renderError("Usage: ws add <name> <repo...> [--branch <branch>]");
-    process.exit(1);
-  }
-
-  const added = [];
-  for (const repo of repos) {
-    const repoDir = path.join(model.SRC, repo);
-    if (!fs.existsSync(repoDir)) {
-      view.renderError(`  Error: repo not found at ${repoDir}`);
-      process.exit(1);
-    }
-    const wtPath = path.join(wsRoot, repo);
-    if (fs.existsSync(wtPath)) {
-      console.log(`  Exists: ${repo} (already in workspace)`);
-      continue;
-    }
-    const result = model.createWorktree(repoDir, wtPath, branch);
+function applyUpdates(name, wsRoot, toAdd, toSwitch) {
+  for (const spec of toAdd) {
+    const repoDir = path.join(model.SRC, spec.repo);
+    const wtPath = path.join(wsRoot, spec.repo);
+    const result = model.createWorktree(repoDir, wtPath, spec.branch);
     if (result) {
-      console.log(`  Created: ${repo} (${result.status} branch ${result.branch})`);
-      added.push(repo);
+      console.log(
+        `  Added: ${spec.repo} (${result.status} branch ${result.branch})`
+      );
     } else {
-      view.renderError(`  Error: could not create worktree for ${repo}`);
+      view.renderError(`  Error: could not create worktree for ${spec.repo}`);
       view.renderError(
-        `  (branch '${branch}' may already be checked out elsewhere)`
+        `  (branch '${spec.branch}' may already be checked out elsewhere)`
       );
       process.exit(1);
     }
   }
 
-  if (added.length === 0) {
-    console.log("No repos added.");
+  for (const spec of toSwitch) {
+    const wtPath = path.join(wsRoot, spec.repo);
+    const result = model.switchBranch(wtPath, spec.branch);
+    if (result.success) {
+      console.log(`  Switched: ${spec.repo} → ${spec.branch}`);
+    } else {
+      view.renderError(`  Error switching ${spec.repo}: ${result.detail}`);
+    }
+  }
+
+  if (toAdd.length > 0 || toSwitch.length > 0) {
+    model.restartServe(name, wsRoot);
+    console.log(`\nUpdated workspace '${name}'.`);
+  }
+
+  ensureTmuxAndAttach(name, wsRoot);
+}
+
+function cmdUp(args) {
+  const name = args[0];
+  const wsRoot = name ? path.join(model.WS_DIR, name) : null;
+  const isUpdate = wsRoot && fs.existsSync(wsRoot);
+
+  if (!isUpdate && args.length < 2) {
+    view.renderError("Usage: ws up <name> <repo[:branch]...>");
+    process.exit(1);
+  }
+
+  if (isUpdate && args.length < 2) {
+    console.log(`Workspace '${name}' is up to date.`);
+    ensureTmuxAndAttach(name, wsRoot);
     return;
   }
 
-  model.restartServe(name, wsRoot);
+  const defaultBranch = `${model.BRANCH_PREFIX}/${name}`;
+  const repoSpecs = parseRepoArgs(args.slice(1), defaultBranch);
 
-  console.log("");
-  console.log(`Added to '${name}': ${added.join(", ")}`);
-  const base = `https://${name}.local.app.hubspotqa.com`;
-  for (const repo of added) {
-    const url = model.appUrl(repo, base);
-    if (url) console.log(`  ${repo}: ${url}`);
+  validateReposExist(repoSpecs);
+
+  if (!isUpdate) {
+    createWorkspace(name, wsRoot, repoSpecs);
+    return;
   }
+
+  // --- Update mode ---
+  const existingRepos = model.getRepos(wsRoot);
+  const toAdd = [];
+  const toSwitch = [];
+
+  for (const spec of repoSpecs) {
+    if (!existingRepos.includes(spec.repo)) {
+      toAdd.push(spec);
+    } else {
+      const wtPath = path.join(wsRoot, spec.repo);
+      const currentBranch = model.getCurrentBranch(wtPath);
+      if (currentBranch !== spec.branch) {
+        toSwitch.push({ ...spec, currentBranch });
+      }
+    }
+  }
+
+  if (toAdd.length === 0 && toSwitch.length === 0) {
+    console.log(`Workspace '${name}' is up to date.`);
+    ensureTmuxAndAttach(name, wsRoot);
+    return;
+  }
+
+  if (toSwitch.length === 0) {
+    applyUpdates(name, wsRoot, toAdd, []);
+    return;
+  }
+
+  console.log("Branch changes:");
+  for (const spec of toSwitch) {
+    console.log(`  ${spec.repo}: ${spec.currentBranch} → ${spec.branch}`);
+  }
+
+  const readline = require("readline");
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  rl.question("Switch branches? [y/N] ", (answer) => {
+    rl.close();
+    const confirmed = answer.trim().toLowerCase() === "y";
+    applyUpdates(name, wsRoot, toAdd, confirmed ? toSwitch : []);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -345,10 +383,9 @@ function cmdCompletions(args) {
   const rest = args.slice(1);
 
   const SUBCOMMANDS = [
-    "up\tCreate a workspace",
+    "up\tCreate or update a workspace",
     "down\tTear down a workspace",
     "nuke\tNuke a workspace (delete everything)",
-    "add\tAdd repos to a workspace",
     "rm\tRemove repos from a workspace",
     "ls\tList all workspaces",
     "attach\tAttach to a workspace tmux session",
@@ -366,20 +403,17 @@ function cmdCompletions(args) {
 
   switch (subcommand) {
     case "up":
-      srcRepos.forEach((r) => console.log(r));
+      if (rest.length === 0) {
+        workspaces.forEach((w) => console.log(w));
+      } else {
+        srcRepos.forEach((r) => console.log(r));
+      }
       break;
     case "down":
     case "nuke":
     case "attach":
     case "info":
       workspaces.forEach((w) => console.log(w));
-      break;
-    case "add":
-      if (rest.length === 0) {
-        workspaces.forEach((w) => console.log(w));
-      } else {
-        srcRepos.forEach((r) => console.log(r));
-      }
       break;
     case "rm": {
       if (rest.length === 0) {
@@ -406,7 +440,6 @@ module.exports = {
   down: cmdDown,
   nuke: cmdNuke,
   up: cmdUp,
-  add: cmdAdd,
   rm: cmdRm,
   completions: cmdCompletions,
 };

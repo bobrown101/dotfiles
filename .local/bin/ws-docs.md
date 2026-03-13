@@ -37,63 +37,66 @@ instances with distinct URLs. This tool solves both problems using:
 
 | Command | What it does |
 |---|---|
-| `ws up <name> <repo...>` | Create a workspace — worktrees, bend serve, tmux session |
+| `ws up <name> <repo[:branch]...>` | Create or update a workspace |
 | `ws down <name>` | Tear down — kill processes, remove worktrees, delete directory |
 | `ws nuke <name>` | Like `down`, but also deletes local git branches (with confirmation prompt) |
-| `ws add <name> <repo...>` | Add repos to an existing workspace and restart serve |
 | `ws rm <name> <repo...>` | Remove repos from a workspace and restart serve |
 | `ws ls` | List all workspaces with running/stopped status |
 | `ws info <name>` | Show repos, branches, URLs, and useful commands |
 | `ws attach <name>` | Switch to a workspace's tmux session |
 
 **Notes:**
+- `ws up` is idempotent — run it on a new name to create, or an existing name to update
 - `ws up` launches three tmux windows — `serve`, `shell`, `claude` — then auto-attaches to the session
 - `ws down` removes worktrees and the workspace directory but **keeps branches** (unpushed work is safe)
 - `ws nuke` does everything `down` does **plus deletes local git branches** — use when you're completely done with a workspace. Prompts for confirmation before proceeding
 - `ws rm` removes repos from the workspace but doesn't delete branches either
 
-### `ws add --branch <branch>`
+### `repo:branch` syntax
 
-By default, `ws up` and `ws add` both create worktrees on the branch
-`brbrown/<workspace-name>`. The `--branch` flag on `add` lets you override
-this for repos that need a different branch — for example, adding a repo
-where you want to check out someone else's existing branch instead of
-creating a new one.
+By default, `ws up` creates worktrees on the branch `brbrown/<workspace-name>`.
+You can override the branch per-repo using the `repo:branch` syntax:
 
 ```
-ws add my-feature reporting --branch jsmith/reporting-fix
+ws up my-feature crm-index-ui customer-data-table:jsmith/table-fix
 ```
 
-Things to know about `--branch`:
+This creates `crm-index-ui` on `brbrown/my-feature` and `customer-data-table`
+on `jsmith/table-fix`.
 
-- **Only on `add`**, not `up`. `up` creates everything on a single shared
-  branch by design; `add` is for the incremental case where you're pulling in
-  repos that need a different branch. If you need a non-default branch at
-  workspace creation time, `ws up` the workspace with your main repos, then
-  `ws add` the special-branch repos separately.
-- **Applies to all repos in the invocation.** If you need two repos on
-  different branches, run `add` twice:
-  ```
-  ws add my-feature repo-a --branch feature/alpha
-  ws add my-feature repo-b --branch feature/beta
-  ```
-- If the branch already exists in the repo, the worktree checks it out.
-  If not, it creates a new branch from `origin/master`.
+### Updating an existing workspace
 
-> See *Worktrees start from origin/master* below for details on how new branches are created.
+Running `ws up` on an existing workspace adds new repos and can switch branches
+on existing repos:
+
+```
+ws up my-feature reporting:jsmith/reporting-fix
+```
+
+If you specify a different branch for a repo that's already in the workspace,
+you'll be prompted to confirm the switch:
+
+```
+Branch changes:
+  crm-index-ui: brbrown/my-feature → other-branch
+Switch branches? [y/N]
+```
+
+Running `ws up <name>` with no repos on an existing workspace re-attaches to
+the tmux session (creating it if needed).
 
 ## Typical workflow
 
 ```
 ws up table-refactor crm-index-ui crm-object-table
 # later, pull in a colleague's branch for a related repo
-ws add table-refactor reporting --branch jsmith/reporting-fix
+ws up table-refactor reporting:jsmith/reporting-fix
 # done with the feature
 ws down table-refactor
 ```
 
 1. `ws up` creates worktrees for both repos on `brbrown/table-refactor`, starts serve, and drops you into a tmux session.
-2. `ws add --branch` adds a third repo on someone else's existing branch instead of the workspace default.
+2. Running `ws up` again adds a third repo on someone else's existing branch.
 3. `ws down` tears everything down — processes, worktrees, workspace directory — but leaves all branches intact.
 
 ## Filesystem layout (the single source of truth)
@@ -112,18 +115,13 @@ There are no metadata files. The filesystem IS the state:
 
 ## Code structure
 
-The file is organized top-to-bottom in dependency order:
+The tool is organized as MVC with three modules:
 
-| Section | What |
+| File | What |
 |---|---|
-| Constants | `HOME`, `SRC`, `WS_DIR`, `BRANCH_PREFIX` |
-| Color helpers | ANSI wrappers with `NO_COLOR` / non-TTY detection |
-| Shell helpers | `run()`, `runSilent()`, `tmuxHasSession()`, `pgrepCount()` |
-| Filesystem helpers | `getRepos()`, `parentRepo()`, `allWorkspaces()` |
-| URL maps | `APP_PATHS` and `TEST_PATHS` objects, `appUrl()`, `testUrls()` |
-| Commands | `cmdUp`, `cmdDown`, `cmdNuke`, `cmdAdd`, `cmdRm`, `cmdLs`, `cmdInfo`, `cmdAttach`, `cmdHelp` + `teardownWorkspace` helper |
-| Completions | `getSrcRepos()`, `cmdCompletions()` — outputs candidates for shell completion |
-| CLI router | `process.argv` dispatch |
+| `model.js` | Constants, shell/fs helpers, worktree operations, process management, tmux |
+| `view.js` | Color helpers, help text, info/ls/error rendering |
+| `commands.js` | Command handlers, arg parsing, orchestration logic |
 
 ## Design decisions and why
 
@@ -132,6 +130,16 @@ We intentionally eliminated `~/.local/share/ws/<name>` metadata files that
 previously stored the list of repos per workspace. The filesystem can't drift
 out of sync — if you manually add/remove a worktree, `ws ls` still reflects
 reality.
+
+### Idempotent `ws up`
+`ws up` both creates new workspaces and updates existing ones. This replaced
+the separate `ws add` command. The single command is easier to remember and
+supports the natural workflow of incrementally building up a workspace.
+
+### Per-repo branches via `repo:branch`
+The `repo:branch` syntax allows specifying different branches for each repo
+in a single command invocation. This is common when you need your own feature
+branch for one repo but a colleague's branch for a library dependency.
 
 ### Process cleanup with pkill -f
 `tmux kill-session` does NOT kill bend's child processes. When bend runs
@@ -144,9 +152,9 @@ because tsc/rspack/webpack all reference workspace paths in their arguments.
 SIGTERM first, sleep 2 seconds, then SIGKILL.
 
 ### Branch naming
-All worktree branches are `brbrown/<workspace-name>` (set via `BRANCH_PREFIX`).
-If the branch already exists, the worktree checks it out instead of creating a
-new one. Branches are NOT deleted on `ws down` — they may have unpushed commits.
+All worktree branches default to `brbrown/<workspace-name>` (set via
+`BRANCH_PREFIX`). This can be overridden per-repo with the `:branch` syntax.
+Branches are NOT deleted on `ws down` — they may have unpushed commits.
 
 ### Worktrees start from origin/master
 `createWorktree` runs `git fetch origin` then passes `origin/master` as the
@@ -219,7 +227,7 @@ script directly. Without `command`, the fish function intercepts the call and
 falls through to the help output.
 
 ### restartServe kills by BEND_WORKTREE, cmdDown kills by wsRoot
-`restartServe` (used by add/rm) kills with `pkill -f "BEND_WORKTREE=<name>"`
+`restartServe` (used by up-update/rm) kills with `pkill -f "BEND_WORKTREE=<name>"`
 to target just the serve process. `cmdDown` kills with `pkill -f "$wsRoot"` to
 catch ALL processes referencing the workspace path.
 
@@ -237,7 +245,7 @@ The test file has zero dependencies. It runs the `ws` binary as a subprocess
 ### What the tests cover
 
 **Basic command tests** (no side effects, always safe to run):
-- `help` — exit codes, expected text
+- `help` — exit codes, expected text, `repo:branch` syntax documented
 - Unknown command — exit 1, error message, help shown
 - Usage errors — every command with missing args
 - Nonexistent workspace — every command that takes a name
@@ -246,13 +254,15 @@ The test file has zero dependencies. It runs the `ws` binary as a subprocess
 - `info` — tested against whatever workspaces exist on disk
 
 **Lifecycle test** (creates real worktrees and a tmux session):
-- Creates a temporary git repo at `~/src/ws-test-fixture` (with a self-referencing
-  `origin` remote so `git fetch origin` and `origin/master` resolve)
-- Runs: `up` → `info` → `ls` → `rm` → `add` → `down`
+- Creates temporary git repos at `~/src/ws-test-fixture{,2}` (with self-referencing
+  `origin` remotes so `git fetch origin` and `origin/master` resolve)
+- Runs: `up` → `info` → `ls` → `up` (add repo with custom branch) →
+  `up` (branch switch decline) → `up` (branch switch accept) → `rm` → `down`
 - Verifies at each step: filesystem state, tmux session state, exit codes, output
-- Checks edge cases: duplicate `up`, `rm` nonexistent repo, `add` already-present repo, `--branch` flag parsing
+- Checks edge cases: idempotent `up`, `repo:branch` parsing, branch switch
+  confirmation (both accept and decline), `rm` nonexistent repo
 - Verifies no orphan processes after `down`
-- Cleans up the temp repo and workspace in a `finally` block
+- Cleans up temp repos and workspace in a `finally` block
 
 ### When to add new tests
 
@@ -260,7 +270,7 @@ Add a test when you:
 - **Add a new command** — add both a usage-error test and a lifecycle step
 - **Add a new flag** — test the flag, test it missing its value, test it with invalid input
 - **Change process cleanup logic** — the "no orphan processes" assertion in the lifecycle test should catch regressions, but add targeted assertions if the cleanup strategy changes
-- **Change the serve command** — verify `restartServe` still works by testing `add` or `rm`
+- **Change the serve command** — verify `restartServe` still works by testing `rm`
 - **Fix a bug** — add a regression test that would have caught it
 
 You do NOT need to add tests for:

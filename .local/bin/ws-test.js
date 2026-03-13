@@ -10,6 +10,7 @@ const HOME = os.homedir();
 const SRC = path.join(HOME, "src");
 const WS_DIR = path.join(HOME, "src", "workspaces");
 const TEST_REPO = "ws-test-fixture";
+const TEST_REPO2 = "ws-test-fixture-2";
 const TEST_WS = "ws-test-run";
 
 let passed = 0;
@@ -67,8 +68,8 @@ function tmuxHasSession(name) {
   );
 }
 
-function createTestRepo() {
-  const repoPath = path.join(SRC, TEST_REPO);
+function createTestRepo(name) {
+  const repoPath = path.join(SRC, name);
   if (fs.existsSync(repoPath)) return false;
   fs.mkdirSync(repoPath, { recursive: true });
   spawnSync("git", ["init", "-b", "master"], { cwd: repoPath, stdio: "pipe" });
@@ -84,8 +85,8 @@ function createTestRepo() {
   return true;
 }
 
-function removeTestRepo() {
-  const repoPath = path.join(SRC, TEST_REPO);
+function removeTestRepo(name) {
+  const repoPath = path.join(SRC, name);
   if (fs.existsSync(repoPath)) {
     fs.rmSync(repoPath, { recursive: true, force: true });
   }
@@ -97,13 +98,15 @@ function ensureTestWsClean() {
   }
   const wsPath = path.join(WS_DIR, TEST_WS);
   if (fs.existsSync(wsPath)) {
-    const repoDir = path.join(SRC, TEST_REPO);
-    if (fs.existsSync(repoDir)) {
-      spawnSync(
-        "git",
-        ["-C", repoDir, "worktree", "remove", path.join(wsPath, TEST_REPO), "--force"],
-        { stdio: "pipe" }
-      );
+    for (const repoName of [TEST_REPO, TEST_REPO2]) {
+      const repoDir = path.join(SRC, repoName);
+      if (fs.existsSync(repoDir)) {
+        spawnSync(
+          "git",
+          ["-C", repoDir, "worktree", "remove", path.join(wsPath, repoName), "--force"],
+          { stdio: "pipe" }
+        );
+      }
     }
     fs.rmSync(wsPath, { recursive: true, force: true });
   }
@@ -126,6 +129,7 @@ function testHelp() {
   assert(r2.output.includes("ws down <name>"), "help lists down");
   assert(r2.output.includes("Examples:"), "help shows examples");
   assert(r2.output.includes("Layout:"), "help shows layout");
+  assert(r2.output.includes("repo[:branch]"), "help shows repo:branch syntax");
 }
 
 function testUnknownCommand() {
@@ -160,10 +164,6 @@ function testUsageErrors() {
   assert(info.status === 1, "info with no args exits 1");
   assert(info.output.includes("Usage: ws info"), "info shows usage");
 
-  const add = ws("add");
-  assert(add.status === 1, "add with no args exits 1");
-  assert(add.output.includes("Usage: ws add"), "add shows usage");
-
   const rm = ws("rm");
   assert(rm.status === 1, "rm with no args exits 1");
   assert(rm.output.includes("Usage: ws rm"), "rm shows usage");
@@ -183,10 +183,6 @@ function testNonexistent() {
   const attach = ws("attach", "ws-does-not-exist-xyz");
   assert(attach.status === 1, "attach exits 1");
   assert(attach.output.includes("No tmux session"), "attach shows error");
-
-  const add = ws("add", "ws-does-not-exist-xyz", "some-repo");
-  assert(add.status === 1, "add exits 1");
-  assert(add.output.includes("No workspace named"), "add shows error");
 
   const rm = ws("rm", "ws-does-not-exist-xyz", "some-repo");
   assert(rm.status === 1, "rm exits 1");
@@ -247,7 +243,6 @@ function testInfo() {
   const name = wsNames[0];
   const r = ws("info", name);
   assert(r.status === 0, `info ${name} exits 0`);
-  assert(r.output.includes(`brbrown/${name}`), "shows branch");
   assert(r.output.includes(path.join(WS_DIR, name)), "shows root path");
   assert(r.output.includes(`ws down ${name}`), "shows teardown command");
 }
@@ -257,7 +252,7 @@ function testInfo() {
 // ---------------------------------------------------------------------------
 
 function testLifecycle() {
-  console.log("\nlifecycle (up → info → ls → add → rm → down)");
+  console.log("\nlifecycle (up → info → ls → up update → rm → down)");
 
   const tmuxCheck = spawnSync("tmux", ["list-sessions"], { stdio: "pipe" });
   if (tmuxCheck.status !== 0 && !process.env.TMUX) {
@@ -269,7 +264,8 @@ function testLifecycle() {
     spawnSync("tmux", ["kill-session", "-t", "ws-test-bg"], { stdio: "pipe" });
   }
 
-  const created = createTestRepo();
+  const created1 = createTestRepo(TEST_REPO);
+  const created2 = createTestRepo(TEST_REPO2);
   ensureTestWsClean();
 
   try {
@@ -288,12 +284,12 @@ function testLifecycle() {
     );
     assert(tmuxHasSession(TEST_WS), "tmux session created");
 
-    // -- up again (should fail) --
+    // -- up again with same repos (should say up to date) --
     const upAgain = ws("up", TEST_WS, TEST_REPO);
-    assert(upAgain.status === 1, "up again exits 1");
-    assert(upAgain.output.includes("already exists"), "up again shows already exists");
+    assert(upAgain.status === 0, "up again exits 0");
+    assert(upAgain.output.includes("up to date"), "up again shows up to date");
 
-    // -- info --
+    // -- info shows per-repo branches --
     const info = ws("info", TEST_WS);
     assert(info.status === 0, "info exits 0");
     assert(info.output.includes(TEST_REPO), "info lists the repo");
@@ -303,6 +299,33 @@ function testLifecycle() {
     const ls = ws("ls");
     assert(ls.output.includes(TEST_WS), "ls includes test workspace");
     assert(ls.output.includes("[running]"), "ls shows running status");
+
+    // -- up with repo:branch syntax to add second repo --
+    const upAdd = ws("up", TEST_WS, `${TEST_REPO2}:custom-test-branch`);
+    assert(upAdd.status === 0, "up-add exits 0");
+    assert(upAdd.output.includes(`Added: ${TEST_REPO2}`), "up-add confirms addition");
+    assert(upAdd.output.includes("custom-test-branch"), "up-add shows custom branch");
+    assert(
+      fs.existsSync(path.join(wsPath, TEST_REPO2, ".git")),
+      "second worktree created"
+    );
+
+    // -- up with branch switch (decline) --
+    const upSwitchNo = wsWithStdin("n\n", "up", TEST_WS, `${TEST_REPO}:other-branch`);
+    assert(upSwitchNo.status === 0, "up branch-switch decline exits 0");
+    assert(upSwitchNo.output.includes("Branch changes:"), "shows branch change prompt");
+
+    // -- up with branch switch (accept) --
+    const upSwitchYes = wsWithStdin("y\n", "up", TEST_WS, `${TEST_REPO}:test-switched`);
+    assert(upSwitchYes.status === 0, "up branch-switch accept exits 0");
+    assert(upSwitchYes.output.includes("Switched:"), "confirms branch switch");
+
+    // -- verify branch actually switched --
+    const branchResult = spawnSync(
+      "git", ["-C", path.join(wsPath, TEST_REPO), "branch", "--show-current"],
+      { encoding: "utf8", stdio: "pipe" }
+    );
+    assert(branchResult.stdout.trim() === "test-switched", "branch was actually switched");
 
     // -- rm --
     const rm = ws("rm", TEST_WS, TEST_REPO);
@@ -316,24 +339,6 @@ function testLifecycle() {
     // -- rm nonexistent repo --
     const rmMissing = ws("rm", TEST_WS, "not-there");
     assert(rmMissing.output.includes("Not found"), "rm shows not found for missing repo");
-
-    // -- add --
-    const add = ws("add", TEST_WS, TEST_REPO);
-    assert(add.status === 0, "add exits 0");
-    assert(add.output.includes(`Created: ${TEST_REPO}`), "add confirms creation");
-    assert(
-      fs.existsSync(path.join(wsPath, TEST_REPO, ".git")),
-      "worktree restored after add"
-    );
-
-    // -- add with --branch --
-    const addBranch = ws("add", TEST_WS, TEST_REPO, "--branch", "custom-branch");
-    assert(addBranch.output.includes("already in workspace"), "add existing shows already in workspace");
-
-    // -- add with missing --branch value --
-    const addBadFlag = ws("add", TEST_WS, "--branch");
-    assert(addBadFlag.status === 1, "add --branch with no value exits 1");
-    assert(addBadFlag.output.includes("--branch requires a value"), "add shows branch error");
 
     // -- down --
     const down = ws("down", TEST_WS);
@@ -354,7 +359,8 @@ function testLifecycle() {
     );
   } finally {
     ensureTestWsClean();
-    if (created) removeTestRepo();
+    if (created1) removeTestRepo(TEST_REPO);
+    if (created2) removeTestRepo(TEST_REPO2);
   }
 }
 
@@ -371,7 +377,7 @@ function testNukeLifecycle() {
     spawnSync("tmux", ["kill-session", "-t", "ws-test-bg"], { stdio: "pipe" });
   }
 
-  const created = createTestRepo();
+  const created = createTestRepo(TEST_REPO);
   ensureTestWsClean();
 
   try {
@@ -409,7 +415,7 @@ function testNukeLifecycle() {
     assert(branchAfter.stdout.trim().length === 0, "branch deleted from parent repo");
   } finally {
     ensureTestWsClean();
-    if (created) removeTestRepo();
+    if (created) removeTestRepo(TEST_REPO);
   }
 }
 
