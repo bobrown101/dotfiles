@@ -55,10 +55,8 @@ This is idempotent. Works for both new and existing workspaces.
    ```
 6. Run `bend yarn` in each clone (sequentially)
 7. Discover packages and prompt the user to select which to serve (see "package discovery and selection" below)
-8. Create tmux session (see "tmux layout" below)
-9. Launch serve as a background task (see "Launching serve as a background task" below)
-10. Verify serve is running (see "serve health check" below)
-11. Report: workspace name, repos with branches, base URL, and app URLs
+8. Create tmux session — the Claude tab launch prompt includes instructions to start serve as a background task (see "tmux layout" and "Claude tab launch" below)
+9. Report: workspace name, repos with branches, base URL, and that serve will be started by the workspace's Claude instance
 
 **Updating an existing workspace (repos specified):**
 
@@ -166,19 +164,15 @@ IMPORTANT: Use `tmux send-keys` with the command as a single argument (not piped
 
 ### Claude tab launch
 
-Always pass `--name <workspace-name>` so the Claude session is named after the workspace:
+Always pass `--name <workspace-name>` so the Claude session is named after the workspace.
+
+The Claude instance launched in this tab is responsible for starting serve as a background task. Build the serve command (see "Launching serve as a background task" below) and pass it in the initial prompt so this Claude instance runs it immediately on startup:
 
 ```bash
-claude --name <name>
+claude --name <name> "This is the <name> workspace. Start serve by running this as a background task: cd ~/src/workspaces/<name> && env BEND_WORKTREE=<name> NODE_ARGS=--max_old_space_size=16384 bend reactor serve <pkg-path-1> <pkg-path-2> ... --update --ts-watch --enable-tools --run-tests 2>&1 — then verify it started successfully. <optional user task context>"
 ```
 
-If the user provided task context beyond just "create workspace X with repos Y" (e.g., "spin up a workspace to investigate perf issues in crm-object-table"), pass it as an initial prompt:
-
-```bash
-claude --name <name> "This is the <name> workspace. Run /ws info <name> to orient yourself. Then: <user's task context>"
-```
-
-The prompt should only contain the task context — NOT repo names, branches, serve URLs, or workspace details. The claude instance can discover all of that itself via `/ws info <name>`.
+The prompt MUST include the full serve command with the resolved package paths. The workspace Claude instance should NOT need to rediscover packages — the creator already resolved them. Optionally append the user's task context if they provided one (e.g., "Then investigate perf issues in crm-object-table").
 
 Escape any single quotes in the prompt (replace `'` with `'\''`) since the whole command is wrapped in single quotes for tmux send-keys.
 
@@ -244,17 +238,21 @@ Where each `<pkg-path>` is a full path like `~/src/workspaces/<name>/<repo>/<pac
 
 ### Launching serve as a background task
 
-Run `bend yarn` sequentially for each repo first (these are short-lived and should run in the foreground):
-```bash
-cd ~/src/workspaces/<name>/<repo1> && bend yarn && cd ~/src/workspaces/<name>/<repo2> && bend yarn
-```
+IMPORTANT: Serve is launched by the **workspace's own Claude instance** (the one in the `<name>` tmux tab), NOT by the Claude that created the workspace. The creator passes the full serve command in the Claude tab's initial prompt (see "Claude tab launch" above).
 
-Then launch the serve command as a Claude Code background task using the Bash tool with `run_in_background: true`:
-```bash
-Bash(command="cd ~/src/workspaces/<name> && env BEND_WORKTREE=<name> NODE_ARGS=--max_old_space_size=16384 bend reactor serve <pkg-path-1> <pkg-path-2> ... --update --ts-watch --enable-tools --run-tests 2>&1", run_in_background=true)
-```
+The workspace Claude instance should:
 
-This runs serve as a managed background process. Claude Code will notify you when it produces output or exits. You can check its output at any time using the `TaskOutput` tool with the task ID returned by the background Bash call.
+1. Run `bend yarn` sequentially for each repo first (these are short-lived and should run in the foreground):
+   ```bash
+   cd ~/src/workspaces/<name>/<repo1> && bend yarn && cd ~/src/workspaces/<name>/<repo2> && bend yarn
+   ```
+
+2. Then launch the serve command as a background task using the Bash tool with `run_in_background: true`:
+   ```bash
+   Bash(command="cd ~/src/workspaces/<name> && env BEND_WORKTREE=<name> NODE_ARGS=--max_old_space_size=16384 bend reactor serve <pkg-path-1> <pkg-path-2> ... --update --ts-watch --enable-tools --run-tests 2>&1", run_in_background=true)
+   ```
+
+This keeps the background task owned by the long-lived workspace Claude session. The workspace Claude can monitor output, react to errors, and restart serve as needed — even after the creator Claude session is gone.
 
 ### Serve health check
 
