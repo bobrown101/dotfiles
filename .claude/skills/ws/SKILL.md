@@ -35,16 +35,20 @@ This is idempotent. Works for both new and existing workspaces.
 
 **Creating a new workspace:**
 
-1. Validate each repo exists at `~/src/<repo>/`. Stop and report if any are missing.
-2. **Resolve the remote URL** for each repo:
+1. **Validate repos and resolve remote URLs in a single command** for each repo:
    ```
    git -C ~/src/<repo> remote get-url origin
    ```
-   This gives the actual GitHub remote URL. The workspace clone will use this directly so its `origin` points to GitHub, not the local source repo.
-3. `mkdir -p ~/src/workspaces/<name>/`
-4. Pre-seed Claude Code trust: `mkdir -p ~/src/workspaces/<name>/.claude`
-   This prevents the first-launch trust prompt when Claude starts in the workspace's tmux window.
-5. For each repo, clone from the remote URL and check out a workspace branch:
+   This both validates the repo exists (fails if it doesn't) and gives the GitHub remote URL. Run all repos in a single Bash call:
+   ```
+   git -C ~/src/<repo1> remote get-url origin && git -C ~/src/<repo2> remote get-url origin
+   ```
+   Stop and report if any fail.
+2. **Create workspace directory with Claude trust pre-seeded** in one call:
+   ```
+   mkdir -p ~/src/workspaces/<name>/.claude
+   ```
+3. For each repo, clone from the remote URL and check out a workspace branch:
    ```
    git clone <remote-url> ~/src/workspaces/<name>/<repo>
    git -C ~/src/workspaces/<name>/<repo> checkout -b <branch> origin/master
@@ -142,12 +146,9 @@ Two windows per workspace:
 
 Serve runs as a Claude Code background task instead of a tmux window (see "Serve command" below).
 
-Creation sequence:
+Creation sequence — run as a **single chained command**:
 ```bash
-tmux new-session -d -s <name> -n shell -c ~/src/workspaces/<name>/
-tmux new-window -t <name> -n <name> -c ~/src/workspaces/<name>/
-tmux send-keys -t <name>:<name> '<claude-launch-command>' Enter
-tmux select-window -t <name>:shell
+tmux new-session -d -s <name> -n shell -c ~/src/workspaces/<name>/ && tmux new-window -t <name> -n <name> -c ~/src/workspaces/<name>/ && tmux send-keys -t <name>:<name> '<claude-launch-command>' Enter && tmux select-window -t <name>:shell
 ```
 
 <!-- OLD tmux serve approach (3 windows):
@@ -223,6 +224,8 @@ customer-data-properties:  (library — kitchen sink is the deployable)
   - If an **app repo** is in the workspace that consumes the library → do NOT pre-select the kitchen sink. The app is the testing surface.
 - **Never pre-select** `*-storybook` or `*-acceptance-tests` packages.
 - **Other utility packages** (e.g., `property-value-citations`): do NOT pre-select. The user can opt in.
+
+**Auto-accept:** If the default selection results in only the pre-selected packages and there are no additional optional packages to choose from (i.e., every discovered package is pre-selected), skip the prompt entirely and proceed with the defaults. Only prompt when there are meaningful choices to make.
 
 If the user says "all" or "everything", serve all packages. If they just confirm, use the defaults.
 
@@ -314,6 +317,7 @@ For per-repo app links, try to infer the path by checking the repo:
 
 ## Guidelines
 
+- **Minimize Bash round trips**: Chain independent commands with `&&` into a single Bash call wherever possible. For example, validate all repos in one call, create all directories in one call, chain all tmux commands in one call. Every separate Bash invocation requires a permission check and adds latency.
 - Always validate that source repos exist before cloning
 - Never delete branches without explicit user confirmation (nuke only)
 - `down` preserves remote branches — local branches are gone with the clone, which is expected
