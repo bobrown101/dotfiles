@@ -55,8 +55,8 @@ This is idempotent. Works for both new and existing workspaces.
    ```
 6. Run `bend yarn` in each clone (sequentially)
 7. Discover packages and prompt the user to select which to serve (see "package discovery and selection" below)
-8. Create tmux session — the Claude tab launch prompt includes instructions to start serve as a background task (see "tmux layout" and "Claude tab launch" below)
-9. Report: workspace name, repos with branches, base URL, and that serve will be started by the workspace's Claude instance
+8. Create tmux session — the Claude tab launch prompt includes instructions to start serve as a background task and report workspace details (see "tmux layout" and "Claude tab launch" below)
+9. Tell the user the workspace is being set up and to switch to the `<name>` tmux session to see progress. Do NOT repeat the full workspace report — the workspace Claude will handle that.
 
 **Updating an existing workspace (repos specified):**
 
@@ -169,10 +169,12 @@ Always pass `--name <workspace-name>` so the Claude session is named after the w
 The Claude instance launched in this tab is responsible for starting serve as a background task. Build the serve command (see "Launching serve as a background task" below) and pass it in the initial prompt so this Claude instance runs it immediately on startup:
 
 ```bash
-claude --name <name> "This is the <name> workspace. Start serve by running this as a background task: cd ~/src/workspaces/<name> && env BEND_WORKTREE=<name> NODE_ARGS=--max_old_space_size=16384 bend reactor serve <pkg-path-1> <pkg-path-2> ... --update --ts-watch --enable-tools --run-tests 2>&1 — then verify it started successfully. <optional user task context>"
+claude --name <name> "This is the <name> workspace. First, report the workspace details: run /ws info <name> and display the workspace name, repos with branches, base URL, and app URLs. Then start serve by running this as a background task: cd ~/src/workspaces/<name> && env BEND_WORKTREE=<name> NODE_ARGS=--max_old_space_size=16384 bend reactor serve <pkg-path-1> <pkg-path-2> ... --update --ts-watch --enable-tools --run-tests 2>&1 — then verify it started successfully. <optional user task context>"
 ```
 
 The prompt MUST include the full serve command with the resolved package paths. The workspace Claude instance should NOT need to rediscover packages — the creator already resolved them. Optionally append the user's task context if they provided one (e.g., "Then investigate perf issues in crm-object-table").
+
+The workspace Claude is responsible for reporting workspace details (name, repos, branches, URLs) — the creator Claude should NOT do this itself.
 
 Escape any single quotes in the prompt (replace `'` with `'\''`) since the whole command is wrapped in single quotes for tmux send-keys.
 
