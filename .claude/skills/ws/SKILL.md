@@ -56,7 +56,7 @@ This is idempotent. Works for both new and existing workspaces.
 6. Run `bend yarn` in each clone (sequentially)
 7. Discover packages and prompt the user to select which to serve (see "package discovery and selection" below)
 8. Create tmux session (see "tmux layout" below)
-9. Start serve in the tmux serve window (see "serve command" below)
+9. Launch serve as a background task (see "Launching serve as a background task" below)
 10. Verify serve is running (see "serve health check" below)
 11. Report: workspace name, repos with branches, base URL, and app URLs
 
@@ -137,13 +137,22 @@ Claude cannot perform an interactive tmux attach. Instead, tell the user to run:
 
 ## tmux layout
 
-Three windows per workspace:
+Two windows per workspace:
 
-1. **serve** — runs the bend serve command. Working directory: `~/src/workspaces/<name>/`
-2. **shell** — empty shell for manual work. Working directory: `~/src/workspaces/<name>/`
-3. **<name>** — starts a Claude Code instance (window and session both named after the workspace). Working directory: `~/src/workspaces/<name>/`
+1. **shell** — empty shell for manual work. Working directory: `~/src/workspaces/<name>/`
+2. **<name>** — starts a Claude Code instance (window and session both named after the workspace). Working directory: `~/src/workspaces/<name>/`
+
+Serve runs as a Claude Code background task instead of a tmux window (see "Serve command" below).
 
 Creation sequence:
+```bash
+tmux new-session -d -s <name> -n shell -c ~/src/workspaces/<name>/
+tmux new-window -t <name> -n <name> -c ~/src/workspaces/<name>/
+tmux send-keys -t <name>:<name> '<claude-launch-command>' Enter
+tmux select-window -t <name>:shell
+```
+
+<!-- OLD tmux serve approach (3 windows):
 ```bash
 tmux new-session -d -s <name> -n serve -c ~/src/workspaces/<name>/
 tmux send-keys -t <name>:serve '<serve-command>' Enter
@@ -152,8 +161,8 @@ tmux new-window -t <name> -n <name> -c ~/src/workspaces/<name>/
 tmux send-keys -t <name>:<name> '<claude-launch-command>' Enter
 tmux select-window -t <name>:shell
 ```
-
 IMPORTANT: Use `tmux send-keys` with the command as a single argument (not piped through shell) so that globs in the serve command aren't expanded prematurely.
+-->
 
 ### Claude tab launch
 
@@ -233,20 +242,26 @@ env BEND_WORKTREE=<name> NODE_ARGS=--max_old_space_size=16384 bend reactor serve
 
 Where each `<pkg-path>` is a full path like `~/src/workspaces/<name>/<repo>/<package>/`.
 
-Chain it all together for the tmux send-keys:
+### Launching serve as a background task
+
+Run `bend yarn` sequentially for each repo first (these are short-lived and should run in the foreground):
+```bash
+cd ~/src/workspaces/<name>/<repo1> && bend yarn && cd ~/src/workspaces/<name>/<repo2> && bend yarn
 ```
-cd ~/src/workspaces/<name>/<repo1> && bend yarn && cd ~/src/workspaces/<name>/<repo2> && bend yarn && cd ~ && env BEND_WORKTREE=<name> NODE_ARGS=--max_old_space_size=16384 bend reactor serve <pkg-path-1> <pkg-path-2> ... --update --ts-watch --enable-tools --run-tests
+
+Then launch the serve command as a Claude Code background task using the Bash tool with `run_in_background: true`:
+```bash
+Bash(command="cd ~/src/workspaces/<name> && env BEND_WORKTREE=<name> NODE_ARGS=--max_old_space_size=16384 bend reactor serve <pkg-path-1> <pkg-path-2> ... --update --ts-watch --enable-tools --run-tests 2>&1", run_in_background=true)
 ```
+
+This runs serve as a managed background process. Claude Code will notify you when it produces output or exits. You can check its output at any time using the `TaskOutput` tool with the task ID returned by the background Bash call.
 
 ### Serve health check
 
 After starting or restarting serve, verify it's actually running:
 
 1. Wait 10 seconds for the process to start: `sleep 10`
-2. Capture recent output from the serve window:
-   ```
-   tmux capture-pane -t <name>:serve -p -S -30
-   ```
+2. Read the background task's output using `TaskOutput` with the serve task ID
 3. Check the output for problems:
    - **Error patterns**: `Error:`, `EADDRINUSE`, `ENOENT`, `Cannot find module`, `ERR!`, `failed`, `FATAL`, `command not found`
    - **Success patterns**: `Compiled`, `webpack`, `rspack`, `Watching for changes`, `ready`, `Built in`
@@ -263,13 +278,27 @@ Also use this health check after restarting serve (step 4 of "Restarting serve")
 
 When repos are added or removed from a running workspace:
 
-1. `tmux send-keys -t <name>:serve C-c` (Ctrl-C the current serve)
+1. `pkill -TERM -f "BEND_WORKTREE=<name>"` then `sleep 1` then `pkill -9 -f "BEND_WORKTREE=<name>"`
+2. Launch a new background Bash task with the updated serve command (see "Launching serve as a background task")
+3. Run the serve health check (see above)
+
+Note: restart kills by `BEND_WORKTREE=<name>` (targets just serve). Full teardown kills by workspace path (targets everything).
+
+<!-- OLD tmux-based serve launch and health check:
+
+Chain it all together for the tmux send-keys:
+```
+cd ~/src/workspaces/<name>/<repo1> && bend yarn && cd ~/src/workspaces/<name>/<repo2> && bend yarn && cd ~ && env BEND_WORKTREE=<name> NODE_ARGS=--max_old_space_size=16384 bend reactor serve <pkg-path-1> <pkg-path-2> ... --update --ts-watch --enable-tools --run-tests
+```
+
+Health check used `tmux capture-pane -t <name>:serve -p -S -30` to read output.
+
+Restart used:
+1. `tmux send-keys -t <name>:serve C-c`
 2. `sleep 2`
 3. `pkill -TERM -f "BEND_WORKTREE=<name>"` then `sleep 1` then `pkill -9 -f "BEND_WORKTREE=<name>"`
 4. Send the new serve command to the serve window
-5. Run the serve health check (see above)
-
-Note: restart kills by `BEND_WORKTREE=<name>` (targets just serve). Full teardown kills by workspace path (targets everything).
+-->
 
 ## URL inference
 
