@@ -8,10 +8,14 @@ argument-hint: "[up <name> <repo[:branch]...> | down <name> | nuke <name> | rm <
 
 Manage isolated multi-repo development workspaces. Each workspace gets its own git clones, bend serve instance (with a unique subdomain), and tmux session.
 
+## Design principle: fast handoff
+
+The **creator** (the Claude instance where the user asks for a workspace) does the absolute minimum: validate inputs, create the directory, launch the tmux session, and hand off to the **workspace Claude** (the Claude instance that runs inside the workspace tmux session). The workspace Claude handles everything else — cloning, installing, package discovery, serve, and asking the user any follow-up questions. This keeps the creator fast and lets the workspace Claude own its own environment.
 
 ## Conventions
 
 - **Workspace root**: `~/src/workspaces/<name>/`
+- **Name normalization**: always replace spaces with hyphens in the workspace name before using it anywhere (directory paths, tmux session, prompt file, serve subdomain, branch names). E.g. `"search endpoint migration"` → `"search-endpoint-migration"`.
 - **Source repos**: `~/src/<repo>/` (these must exist before cloning)
 - **Clones**: `~/src/workspaces/<name>/<repo>/` (cloned from the repo's GitHub remote URL)
 - **Branch default**: `brbrown/<workspace-name>` (override per-repo with `repo:branch` syntax)
@@ -35,40 +39,53 @@ This is idempotent. Works for both new and existing workspaces.
 
 **Creating a new workspace:**
 
+The creator does only these steps:
+
 1. **Validate repos and resolve remote URLs in a single command** for each repo:
-   ```
-   git -C ~/src/<repo> remote get-url origin
-   ```
-   This both validates the repo exists (fails if it doesn't) and gives the GitHub remote URL. Run all repos in a single Bash call:
    ```
    git -C ~/src/<repo1> remote get-url origin && git -C ~/src/<repo2> remote get-url origin
    ```
    Stop and report if any fail.
-2. **Create workspace directory with Claude trust pre-seeded** in one call:
+
+2. **Present a confirmation plan before executing.** After validating repos (step 1), present a single summary and ask the user to confirm or adjust. The plan should include:
+   - **Workspace name** (= tmux session name and serve subdomain)
+   - **Branch name** for each repo (default: `brbrown/<workspace-name>`, or as specified)
+   - **Repos** that will be cloned
+   - **Serve URL** (`https://<name>.local.app.hubspotqa.com`)
+
+   Format example:
    ```
-   mkdir -p ~/src/workspaces/<name>/.claude
+   Here's the plan:
+
+   Workspace: css-hover-cell-cleanup
+   Repos & branches:
+     customer-data-table → brbrown/css-hover-cell-cleanup
+   Serve URL: https://css-hover-cell-cleanup.local.app.hubspotqa.com
+
+   OK to proceed, or any changes?
    ```
-3. For each repo, clone from the remote URL and check out a workspace branch:
+
+   Wait for explicit approval before proceeding.
+
+3. **Write the handoff prompt to a temp file**, then **run `ws-init`** — two tool calls (sequential):
+
+   First, use the Write tool to write the handoff prompt (see "Claude tab launch" below) to `/tmp/ws-<name>-init-prompt.txt`. Writing to `/tmp` doesn't require approval.
+
+   Then run:
+   ```bash
+   ~/.local/bin/ws-init <name>
    ```
-   git clone <remote-url> ~/src/workspaces/<name>/<repo>
-   git -C ~/src/workspaces/<name>/<repo> checkout -b <branch> origin/master
-   ```
-   If `-b <branch>` fails (branch already exists on the remote), check it out instead:
-   ```
-   git -C ~/src/workspaces/<name>/<repo> checkout <branch>
-   ```
-6. Run `bend yarn` in each clone (sequentially)
-7. Discover packages and prompt the user to select which to serve (see "package discovery and selection" below)
-8. Create tmux session — the Claude tab launch prompt includes instructions to start serve as a background task and report workspace details (see "tmux layout" and "Claude tab launch" below)
-9. Tell the user the workspace is being set up and to switch to the `<name>` tmux session to see progress. Do NOT repeat the full workspace report — the workspace Claude will handle that.
+
+   The `ws-init` script handles everything: creating the workspace directory, writing `.claude/settings.json`, creating the tmux session/windows, and launching the workspace Claude from the prompt file. This is a single Bash call that can be auto-approved, avoiding the multiple approval prompts that mkdir-on-sensitive-paths and tmux `&&` chains would trigger.
+
+4. **Tell the user** the workspace is being set up and to switch to the `<name>` tmux session. Do NOT do any further setup work — the workspace Claude handles everything from here.
 
 **Updating an existing workspace (repos specified):**
 
 1. Determine which repos are new (not yet in workspace) and which already exist
-2. For new repos: clone as above
-3. For existing repos where the specified branch differs from current: ask the user to confirm the branch switch before proceeding. Switch with `git -C <clone> checkout <branch>`
-4. If anything changed, restart serve (see "restarting serve" below)
-5. If tmux session doesn't exist, create it
+2. For new repos: pass them to the workspace Claude via the handoff prompt to clone
+3. For existing repos where the specified branch differs from current: ask the user to confirm the branch switch before proceeding
+4. If tmux session doesn't exist, create it
 
 **Updating with no repos specified (`/ws up <name>`):**
 
@@ -144,44 +161,62 @@ Two windows per workspace:
 1. **shell** — empty shell for manual work. Working directory: `~/src/workspaces/<name>/`
 2. **<name>** — starts a Claude Code instance (window and session both named after the workspace). Working directory: `~/src/workspaces/<name>/`
 
-Serve runs as a Claude Code background task instead of a tmux window (see "Serve command" below).
+Serve runs as a Claude Code background task owned by the workspace Claude (see "Serve command" below).
 
-Creation sequence — run as a **single chained command**:
-```bash
-tmux new-session -d -s <name> -n shell -c ~/src/workspaces/<name>/ && tmux new-window -t <name> -n <name> -c ~/src/workspaces/<name>/ && tmux send-keys -t <name>:<name> '<claude-launch-command>' Enter && tmux select-window -t <name>:shell
-```
-
-<!-- OLD tmux serve approach (3 windows):
-```bash
-tmux new-session -d -s <name> -n serve -c ~/src/workspaces/<name>/
-tmux send-keys -t <name>:serve '<serve-command>' Enter
-tmux new-window -t <name> -n shell -c ~/src/workspaces/<name>/
-tmux new-window -t <name> -n <name> -c ~/src/workspaces/<name>/
-tmux send-keys -t <name>:<name> '<claude-launch-command>' Enter
-tmux select-window -t <name>:shell
-```
-IMPORTANT: Use `tmux send-keys` with the command as a single argument (not piped through shell) so that globs in the serve command aren't expanded prematurely.
--->
+Creation is handled by `~/.local/bin/ws-init <name>` — see step 3 of "up" above. The script creates the tmux session, windows, and launches the workspace Claude.
 
 ### Claude tab launch
 
 Always pass `--name <workspace-name>` so the Claude session is named after the workspace.
 
-The Claude instance launched in this tab is responsible for starting serve as a background task. Build the serve command (see "Launching serve as a background task" below) and pass it in the initial prompt so this Claude instance runs it immediately on startup:
+The workspace Claude instance is responsible for ALL setup: cloning repos, installing deps, discovering packages, starting serve, and reporting workspace details. The creator passes all necessary context in the initial prompt.
 
-```bash
-claude --name <name> "This is the <name> workspace. First, report the workspace details: run /ws info <name> and display the workspace name, repos with branches, base URL, and app URLs. Then start serve by running this as a background task: cd ~/src/workspaces/<name> && env BEND_WORKTREE=<name> NODE_ARGS=--max_old_space_size=16384 bend reactor serve <pkg-path-1> <pkg-path-2> ... --update --ts-watch --enable-tools --run-tests 2>&1 — then verify it started successfully. <optional user task context>"
+**Handoff prompt template** (written to `/tmp/ws-<name>-init-prompt.txt` by the creator):
+
+```
+You are setting up the <name> workspace.
+
+REPOS TO CLONE (clone each, then checkout the branch from origin/master):
+<for each repo>
+  - repo: <repo-name>, remote: <remote-url>, branch: <branch-name>
+</for each repo>
+
+SETUP STEPS:
+1. Clone each repo into ~/src/workspaces/<name>/<repo>/ from its remote URL
+2. For each clone, checkout the workspace branch: git checkout -b <branch> origin/master (if branch exists on remote, just git checkout <branch>)
+3. Run bend yarn in each clone (sequentially)
+4. Discover serveable packages and start serve (see below)
+5. Report workspace details: name, repos with branches, serve URL, app URLs
+
+SERVE:
+- Discover packages: list subdirs with package.json in each repo clone (exclude node_modules, target, schemas, hubspot.deploy, docs, acceptance-tests)
+- Classify repos: if <repo>.yaml exists in hubspot.deploy/ → app; if only kitchen-sink/storybook/acceptance-tests yamls → library
+- Default selection: always serve the main package; serve kitchen sinks only for libraries with no consuming app in the workspace; never serve storybooks or acceptance-tests
+- If the defaults are the only option, auto-accept. Otherwise ask the user which packages to serve.
+- Run: env BEND_WORKTREE=<name> NODE_ARGS=--max_old_space_size=16384 bend reactor serve <pkg-paths...> --update --ts-watch --enable-tools --run-tests
+- Launch serve as a background task (Bash with run_in_background: true), then verify it started
+
+WORKTREE URLS:
+The workspace name is used as a subdomain prefix on ALL local dev URLs. Examples:
+- App: https://<name>.local.app.hubspotqa.com/contacts/103830646/objects/0-1/views/all/list
+- Test runner: https://<name>.local.hsappstatic.net/<package-name>/static/test/test.html?spec=
+- Kitchen sink: https://<name>.local.app.hubspotqa.com/<repo>-kitchen-sink/103830646/
+NEVER use the non-worktree domain (local.hsappstatic.net without prefix). Always use <name>.local.hsappstatic.net or <name>.local.app.hubspotqa.com.
+
+PORTAL ID: 103830646
+
+<optional: user intent/task context>
 ```
 
-The prompt MUST include the full serve command with the resolved package paths. The workspace Claude instance should NOT need to rediscover packages — the creator already resolved them. Optionally append the user's task context if they provided one (e.g., "Then investigate perf issues in crm-object-table").
+Include the user's task context or intent if they provided one (e.g., "The user wants to investigate virtualization DOM mutation performance"). This helps the workspace Claude understand what the user is working on and ask relevant follow-up questions.
 
-The workspace Claude is responsible for reporting workspace details (name, repos, branches, URLs) — the creator Claude should NOT do this itself.
-
-Escape any single quotes in the prompt (replace `'` with `'\''`) since the whole command is wrapped in single quotes for tmux send-keys.
+No escaping is needed — the prompt is written to a file via the Write tool, and the `ws-init` script reads it from there. This avoids all quoting/escaping issues with tmux send-keys.
 
 ## Serve command
 
-### Package discovery and selection
+All serve setup is handled by the **workspace Claude instance**, not the creator. The handoff prompt (see "Claude tab launch") includes instructions for the workspace Claude to follow.
+
+### Package discovery and selection (workspace Claude)
 
 Each repo contains multiple serveable packages (main app/lib, kitchen sinks, storybooks, utility libs, etc.). Rather than serving everything, discover the available packages and let the user choose.
 
@@ -190,7 +225,7 @@ Each repo contains multiple serveable packages (main app/lib, kitchen sinks, sto
 ls -d ~/src/workspaces/<name>/<repo>/*/ | grep -v node_modules | grep -v target | grep -v schemas | grep -v hubspot.deploy | grep -v docs | grep -v acceptance-tests
 ```
 
-Each subdirectory with a `package.json` is a serveable package.
+Each subdirectory with a `package.json` is a serveable package. Some repos are single-package (only a root `package.json`) — in that case, serve the repo root.
 
 **Classify each repo** by checking `<clone>/hubspot.deploy/` for a deploy yaml named after the main package:
 - If `<repo>.yaml` exists (e.g., `crm-index-ui/hubspot.deploy/crm-index-ui.yaml`) → the main package is a **deployable app**
@@ -241,9 +276,7 @@ env BEND_WORKTREE=<name> NODE_ARGS=--max_old_space_size=16384 bend reactor serve
 
 Where each `<pkg-path>` is a full path like `~/src/workspaces/<name>/<repo>/<package>/`.
 
-### Launching serve as a background task
-
-IMPORTANT: Serve is launched by the **workspace's own Claude instance** (the one in the `<name>` tmux tab), NOT by the Claude that created the workspace. The creator passes the full serve command in the Claude tab's initial prompt (see "Claude tab launch" above).
+### Launching serve as a background task (workspace Claude)
 
 The workspace Claude instance should:
 
@@ -287,22 +320,6 @@ When repos are added or removed from a running workspace:
 
 Note: restart kills by `BEND_WORKTREE=<name>` (targets just serve). Full teardown kills by workspace path (targets everything).
 
-<!-- OLD tmux-based serve launch and health check:
-
-Chain it all together for the tmux send-keys:
-```
-cd ~/src/workspaces/<name>/<repo1> && bend yarn && cd ~/src/workspaces/<name>/<repo2> && bend yarn && cd ~ && env BEND_WORKTREE=<name> NODE_ARGS=--max_old_space_size=16384 bend reactor serve <pkg-path-1> <pkg-path-2> ... --update --ts-watch --enable-tools --run-tests
-```
-
-Health check used `tmux capture-pane -t <name>:serve -p -S -30` to read output.
-
-Restart used:
-1. `tmux send-keys -t <name>:serve C-c`
-2. `sleep 2`
-3. `pkill -TERM -f "BEND_WORKTREE=<name>"` then `sleep 1` then `pkill -9 -f "BEND_WORKTREE=<name>"`
-4. Send the new serve command to the serve window
--->
-
 ## URL inference
 
 The base URL is always `https://<name>.local.app.hubspotqa.com`.
@@ -317,7 +334,8 @@ For per-repo app links, try to infer the path by checking the repo:
 
 ## Guidelines
 
-- **Minimize Bash round trips**: Chain independent commands with `&&` into a single Bash call wherever possible. For example, validate all repos in one call, create all directories in one call, chain all tmux commands in one call. Every separate Bash invocation requires a permission check and adds latency.
+- **Creator does minimal work**: The creator validates inputs, creates the workspace dir + settings, launches tmux, and hands off. All cloning, installing, package discovery, and serve setup is the workspace Claude's job.
+- **Minimize Bash round trips**: Chain independent commands with `&&` into a single Bash call wherever possible. Every separate Bash invocation requires a permission check and adds latency.
 - Always validate that source repos exist before cloning
 - Never delete branches without explicit user confirmation (nuke only)
 - `down` preserves remote branches — local branches are gone with the clone, which is expected
@@ -325,5 +343,5 @@ For per-repo app links, try to infer the path by checking the repo:
 - When running multiple git/tmux commands, run them sequentially (they depend on each other)
 - For `pkill`, always SIGTERM first, wait, then SIGKILL. Processes may not die immediately.
 - Use `git -C <path>` instead of `cd <path> && git ...` to avoid compound-command security prompts.
-- This skill replaces the old `ws` Node.js CLI tool at `~/.local/bin/ws`. NEVER modify files in `~/.local/bin/ws*` or `~/.local/lib/ws/` — those are legacy and should not be touched.
-- Workspace directories are ephemeral. Any per-project Claude Code settings (permissions, rules) granted during a workspace session will be lost on teardown. Prefer configuring permissions globally in `~/.claude/settings.json` rather than per-workspace.
+- The `~/.local/bin/ws-init` script is part of this skill and handles workspace bootstrapping (dir creation, settings, tmux, Claude launch).
+- Workspace directories get permissive `.claude/settings.json` written by the creator (see step 3 of "up"). This gives the workspace Claude broad read/write/execute access within the workspace without per-command approval prompts.
