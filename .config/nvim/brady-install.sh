@@ -12,5 +12,5 @@ brew install libtool automake cmake pkg-config gettext
 make CMAKE_BUILD_TYPE=RelWithDebInfo
 make install
 export PATH="$HOME/neovim/bin:$PATH"
-nvim --headless "+Lazy! sync" +qa
+nvim --headless +qa
 nvim -c "TSUpdate"

@@ -34,5 +34,5 @@ switch (uname)
       echo ERR - your fish config did not recognize the OS type
 end
 
-nvim --headless "+Lazy! sync" +qa
+nvim --headless +qa
 nvim -c "TSUpdate"

@@ -1,449 +1,288 @@
 vim.g.mapleader = " "
 
-local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
-if not vim.uv.fs_stat(lazypath) then
-    vim.fn.system({
-        "git",
-        "clone",
-        "--filter=blob:none",
-        "https://github.com/folke/lazy.nvim.git",
-        "--branch=stable", -- latest stable release
-        lazypath,
-    })
-end
-vim.opt.rtp:prepend(lazypath)
+vim.pack.add({
+    -- Theme (load first so colors apply everywhere)
+    "https://github.com/folke/tokyonight.nvim",
 
-require("lazy").setup({
+    -- Core libs (deps for many others)
+    "https://github.com/nvim-lua/plenary.nvim",
+    "https://github.com/nvim-tree/nvim-web-devicons",
+
+    -- Treesitter (dep for lspsaga, ts-comments)
+    { src = "https://github.com/nvim-treesitter/nvim-treesitter", version = "main" },
+
+    -- UI
+    "https://github.com/stevearc/oil.nvim",
+    "https://github.com/nvim-lualine/lualine.nvim",
+    "https://github.com/goolord/alpha-nvim",
+    "https://github.com/folke/which-key.nvim",
+    "https://github.com/nvim-telescope/telescope.nvim",
+    "https://github.com/folke/todo-comments.nvim",
+    "https://github.com/folke/ts-comments.nvim",
+
+    -- Git
+    "https://github.com/lewis6991/gitsigns.nvim",
+    "https://github.com/FabijanZulj/blame.nvim",
+
+    -- LSP
+    "https://github.com/neovim/nvim-lspconfig",
+    { src = "https://github.com/j-hui/fidget.nvim", version = "legacy" },
+    "https://github.com/nvimdev/lspsaga.nvim",
+
+    -- Completion
+    "https://github.com/hrsh7th/nvim-cmp",
+    "https://github.com/hrsh7th/cmp-nvim-lsp",
+    "https://github.com/hrsh7th/cmp-nvim-lua",
+    "https://github.com/hrsh7th/cmp-buffer",
+    "https://github.com/onsails/lspkind-nvim",
+
+    -- Formatting
+    "https://github.com/stevearc/conform.nvim",
+
+    -- HubSpot
+    "https://github.com/bobrown101/plugin-utils.nvim",
+    "https://github.com/bobrown101/hubspot-js-utils.nvim",
+    "https://github.com/HubSpotEngineering/bend.nvim",
+    "https://github.com/pmizio/typescript-tools.nvim",
+})
+
+require("tokyonight").setup({
+    style = "day",
+    transparent = false,
+    terminal_colors = true,
+    on_highlights = function(highlights, colors)
+        highlights.WinSeparator = { fg = colors.border_highlight, bg = colors.border_highlight }
+        highlights.CursorLine = { bg = "#ffe6e6" }
+        highlights.Cursor = { bg = "#cc6666", fg = "#ffffff" }
+    end,
+})
+vim.cmd.colorscheme("tokyonight")
+
+require("oil").setup({
+    view_options = { show_hidden = true },
+})
+
+require("fidget").setup({})
+
+require("which-key").add({
+    { "<leader>d", group = "Diagnostics" },
+    { "<leader>dd", vim.diagnostic.open_float, desc = "Open diagnostic float" },
+    { "<leader>f", group = "file" },
     {
-      "enochchau/nvim-pretty-ts-errors",
-      build = "npm install",
-    },
-    {
-        "folke/tokyonight.nvim",
-        lazy = false, -- make sure we load this during startup if it is your main colorscheme
-        day_brightness = 1, -- Adjusts the brightness of the colors of the **Day** style. Number between 0 and 1, from dull to vibrant colors
-        priority = 1001, -- make sure to load this before all the other start plugins
-        config = function()
-            require("tokyonight").setup({
-                -- style = "night", -- The theme comes in three styles, `storm`, `moon`, a darker variant `night` and `day`
-                style = "day", -- The theme comes in three styles, `storm`, `moon`, a darker variant `night` and `day`
-                transparent = false, -- Enable this to disable setting the background color
-                terminal_colors = true, -- Configure the colors used when opening a `:terminal` in Neovim
-                on_highlights = function(highlights, colors)
-                    highlights.WinSeparator = { fg = colors.border_highlight, bg = colors.border_highlight }
-                    highlights.CursorLine = { bg = "#ffe6e6" } -- Very light red background for cursor line
-                    -- Cursor highlight defines colors for the actual cursor block character
-                    -- This works with guicursor setting in settings.lua which references "Cursor/lCursor"
-                    -- to apply these colors to the cursor in different modes
-                    highlights.Cursor = { bg = "#cc6666", fg = "#ffffff" } -- Darker red background for cursor block
-                end,
+        "<leader>ff",
+        function()
+            require("telescope.builtin").find_files({
+                layout_config = { height = 0.9, width = 0.9 },
+                hidden = true,
             })
-            vim.cmd([[colorscheme tokyonight]])
         end,
+        desc = "Find File",
     },
+    { "<leader>gb", "<cmd>BlameToggle<cr>", desc = "Git Blame" },
     {
-        "stevearc/oil.nvim",
-        ---@module 'oil'
-        ---@type oil.SetupOpts
-        opts = {},
-        -- Optional dependencies
-        dependencies = { "nvim-tree/nvim-web-devicons" }, -- use if prefer nvim-web-devicons
-        config = function()
-            require("oil").setup({
-                view_options = {
-                    show_hidden = true,
-                },
-            })
+        "<leader>gt",
+        function() require("hubspot-js-utils").test_file() end,
+        desc = "Test File",
+    },
+    { "<leader>s", group = "Search" },
+    { "<leader>sh", "<cmd>split<cr>", desc = "Split Horizontal" },
+    {
+        "<leader>ss",
+        function()
+            require("telescope.builtin").live_grep({ layout_config = { height = 0.9, width = 0.9 } })
         end,
+        desc = "Search String",
     },
+    { "<leader>sv", "<cmd>vsplit<cr>", desc = "Split Vertical" },
     {
-        "j-hui/fidget.nvim",
-        tag = "legacy",
-        event = "LspAttach",
-        opts = {
-            -- options
+        mode = "n",
+        {
+            "_",
+            function()
+                vim.cmd("term ")
+                vim.cmd("startinsert")
+            end,
+            desc = "Terminal",
+        },
+        { "-", "<cmd>Oil<cr>", desc = "File browser" },
+        {
+            "<tab>",
+            function()
+                require("telescope.builtin").buffers(require("telescope.themes").get_dropdown({
+                    sort_lastused = true,
+                    layout_config = { height = 0.3, width = 0.9 },
+                }))
+            end,
+            desc = "open up buffers list",
         },
     },
-    "bobrown101/plugin-utils.nvim",
     {
-        "folke/which-key.nvim",
-        config = function()
-            local wk = require("which-key")
-            wk.add({
-                { "<leader>d", group = "Diagnostics" },
-                {
-                    "<leader>dd",
-                    function()
-                        vim.diagnostic.open_float()
-                    end,
-                    desc = "Open diagnostic float",
-                },
-                { "<leader>f", group = "file" },
-                {
-                    "<leader>ff",
-                    function()
-                        require("telescope.builtin").find_files({
-                            layout_config = { height = 0.9, width = 0.9 },
-                            hidden = true,
-                        })
-                    end,
-                    desc = "Find File",
-                },
-                {
-                    "<leader>gb",
-                    function()
-                        vim.cmd("BlameToggle")
-                    end,
-                    desc = "Git Blame",
-                },
-                {
-                    "<leader>gt",
-                    function()
-                        require("hubspot-js-utils").test_file()
-                    end,
-                    desc = "Test File",
-                },
-                { "<leader>s", group = "Search" },
-                {
-                    "<leader>sh",
-                    function()
-                        vim.cmd("split")
-                    end,
-                    desc = "Split Horizontal",
-                },
-                {
-                    "<leader>ss",
-                    function()
-                        require("telescope.builtin").live_grep( --
-                            { layout_config = { height = 0.9, width = 0.9 } }
-                        )
-                    end,
-                    desc = "Search String",
-                },
-                {
-                    "<leader>sv",
-                    function()
-                        vim.cmd("vsplit")
-                    end,
-                    desc = "Split Vertical",
-                },
-                {
-                    mode = "n",
-                    {
-                        "_",
-                        function()
-                            vim.cmd("term ")
-                            vim.cmd("startinsert")
-                        end,
-                        desc = "Terminal",
-                    },
-                    {
-                        "-",
-                        function()
-                            vim.cmd("Oil")
-                        end,
-                        desc = "File browser",
-                    },
-                    {
-                        "<tab>",
-                        function()
-                            require("telescope.builtin").buffers( --
-                                require("telescope.themes").get_dropdown({
-                                    sort_lastused = true,
-                                    layout_config = { height = 0.3, width = 0.9 },
-                                })
-                            )
-                        end,
-                        desc = "open up buffers list",
-                    },
-                },
-                {
-                    mode = "t",
-                    {
-                        "<esc><esc>",
-                        function()
-                            vim.cmd("stopinsert")
-                        end,
-                        desc = "Escape terminal insert mode",
-                    },
-                },
-            })
-        end,
+        mode = "t",
+        { "<esc><esc>", "<cmd>stopinsert<cr>", desc = "Escape terminal insert mode" },
     },
-    {
-        "bobrown101/hubspot-js-utils.nvim",
-        requires = { "bobrown101/plugin-utils.nvim" },
-        config = function()
-            require("hubspot-js-utils").setup({})
-        end,
-    },
-    {
-        "FabijanZulj/blame.nvim",
-        config = function()
-            require("blame").setup({
-                mappings = {
-                    commit_info = "K",
-                    stack_push = "l",
-                    stack_pop = "h",
-                    show_commit = "<CR>",
-                    close = { "<esc>", "q" },
-                },
-            })
-        end,
-    },
-    "nvim-lua/plenary.nvim",
-    {
-        "lewis6991/gitsigns.nvim",
-        requires = { "nvim-lua/plenary.nvim" },
-        config = function()
-            require("gitsigns").setup()
-        end,
-    },
+})
 
-    {
-        "nvim-treesitter/nvim-treesitter",
-        config = function()
-            local treesitter = require("nvim-treesitter.configs")
+require("hubspot-js-utils").setup({})
 
-            treesitter.setup({
-                ensure_installed = "all",
-                ignore_install = { "haskell" },
-                highlight = { enable = true },
-            })
-        end,
+require("blame").setup({
+    mappings = {
+        commit_info = "K",
+        stack_push = "l",
+        stack_pop = "h",
+        show_commit = "<CR>",
+        close = { "<esc>", "q" },
     },
-    "onsails/lspkind-nvim",
-    "hrsh7th/cmp-nvim-lsp",
-    "hrsh7th/cmp-nvim-lua",
-    "hrsh7th/cmp-buffer",
+})
 
-    {
-        "hrsh7th/nvim-cmp",
-        config = function()
-            local cmp = require("cmp")
-            local lspkind = require("lspkind")
-            local sources = {
-                { name = "path" },
-                { name = "nvim_lsp" },
-                { name = "buffer" },
-                { name = "nvim_lua" },
-                { name = "treesitter" },
-                --[[ { name = "nvim_cmp_hs_translation_source" }, ]]
-            }
+require("gitsigns").setup()
 
-            cmp.setup({
-                snippet = { expand = function() end },
-                mapping = {
-                    ["<Tab>"] = function(fallback)
-                        if cmp.visible() then
-                            cmp.select_next_item()
-                        else
-                            fallback()
-                        end
-                    end,
-                    ["<S-Tab>"] = function(fallback)
-                        if cmp.visible() then
-                            cmp.select_prev_item()
-                        else
-                            fallback()
-                        end
-                    end,
-                    ["<C-Space>"] = cmp.mapping(cmp.mapping.complete(), { "i", "s" }),
-                    ["<CR>"] = cmp.mapping(cmp.mapping.confirm({ select = true }), { "i", "s" }),
-                },
-                sources = sources,
-                formatting = {
-                    format = function(entry, vim_item)
-                        vim_item.kind = lspkind.presets.default[vim_item.kind] .. " " .. vim_item.kind
-
-                        -- set a name for each source
-                        vim_item.menu = ({
-                            buffer = "[Buffer]",
-                            nvim_lsp = "[LSP]",
-                            nvim_lua = "[Lua]",
-                            latex_symbols = "[Latex]",
-                            nvim_cmp_hs_translation_source = "[Translation]",
-                        })[entry.source.name]
-                        return vim_item
-                    end,
-                },
-            })
-        end,
+require("nvim-treesitter").install({
+    "bash", "c", "css", "fish", "html", "java", "javascript", "json",
+    "lua", "markdown", "markdown_inline", "python", "query", "regex",
+    "tsx", "typescript", "vim", "vimdoc", "yaml",
+})
+vim.api.nvim_create_autocmd("FileType", {
+    pattern = {
+        "bash", "c", "css", "fish", "html", "java", "javascript",
+        "javascriptreact", "json", "lua", "markdown", "python",
+        "typescript", "typescriptreact", "vim", "yaml",
     },
-    {
-        "nvimdev/lspsaga.nvim",
-        config = function()
-            require("lspsaga").setup({
-                code_action = {
-                    extend_gitsigns = true,
-                    num_shortcut = true,
-                    keys = {
-                        quit = "<esc>",
-                        exec = "<CR>",
-                    },
-                },
-                symbol_in_winbar = {
-                    enable = false,
-                },
-            })
-        end,
-        dependencies = {
-            "nvim-treesitter/nvim-treesitter", -- optional
-            "nvim-tree/nvim-web-devicons", -- optional
-        },
-    },
-    "nvim-tree/nvim-web-devicons",
-    {
-        "nvim-lualine/lualine.nvim",
-        requires = { "kyazdani42/nvim-web-devicons", opt = true },
-        config = function()
-            local function fileLocationRelativeToGitRoot()
-                return vim.fn.expand("%:~:.")
+    callback = function() pcall(vim.treesitter.start) end,
+})
+
+local cmp = require("cmp")
+local lspkind = require("lspkind")
+cmp.setup({
+    snippet = { expand = function() end },
+    mapping = {
+        ["<Tab>"] = function(fallback)
+            if cmp.visible() then
+                cmp.select_next_item()
+            else
+                fallback()
             end
-            require("lualine").setup({
-                options = {
-                    theme = "onedark",
-                    component_separators = "|",
-                    -- section_separators = { left = "", right = "" },
-                    section_separators = { left = "", right = "" },
-                },
-                sections = {
-                    lualine_a = {
-                        -- { "mode", separator = { left = "" }, right_padding = 2 },
-                        { "mode", separator = { left = "" }, right_padding = 2 },
-                    },
-                    lualine_b = { fileLocationRelativeToGitRoot, "branch" },
-                    lualine_x = {},
-                    lualine_y = { "filetype", "diff", "progress" },
-                    lualine_z = {
-                        {
-                            "location",
-                            -- separator = { right = "" },
-                            separator = { right = "" },
-                            left_padding = 2,
-                        },
-                    },
-                },
-                inactive_sections = {
-                    lualine_a = { "filename" },
-                    lualine_b = {},
-                    lualine_c = {},
-                    lualine_x = {},
-                    lualine_y = {},
-                    lualine_z = { "location" },
-                },
-                tabline = {},
-                extensions = {},
-            })
         end,
-    },
-    {
-        "folke/ts-comments.nvim",
-        opts = {},
-        event = "VeryLazy",
-    },
-    {
-        "goolord/alpha-nvim",
-        requires = { "kyazdani42/nvim-web-devicons" },
-        config = function()
-            require("alpha").setup(require("alpha.themes.startify").config)
+        ["<S-Tab>"] = function(fallback)
+            if cmp.visible() then
+                cmp.select_prev_item()
+            else
+                fallback()
+            end
         end,
+        ["<C-Space>"] = cmp.mapping(cmp.mapping.complete(), { "i", "s" }),
+        ["<CR>"] = cmp.mapping(cmp.mapping.confirm({ select = true }), { "i", "s" }),
     },
-    {
-        "nvim-telescope/telescope.nvim",
-        config = function()
-            require("telescope").setup({
-                defaults = {
-                    wrap_results = true,
-                },
-            })
-        end,
+    sources = {
+        { name = "path" },
+        { name = "nvim_lsp" },
+        { name = "buffer" },
+        { name = "nvim_lua" },
+        { name = "treesitter" },
     },
-    {
-        "folke/todo-comments.nvim",
-        config = function()
-            require("todo-comments").setup({})
-        end,
-    },
-    {
-        "neovim/nvim-lspconfig",
-    },
-    {
-      "pmizio/typescript-tools.nvim",
-      dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig", {
-          url = "git@git.hubteam.com:HubSpot/bend.nvim.git"
-      }},
-      event = { "BufReadPost *.ts", "BufReadPost *.js", "BufReadPost *.tsx", "BufReadPost *.jsx" },
-      config = function()
-          -- note: you HAVE to setup asset bender before you setup typescript LSP
-          local bend = require("bend")
-          bend.setup({ v2 = true })
-
-          require("typescript-tools").setup({
-              settings = {
-                  tsserver_path = bend.getTsServerPathForCurrentFile(),
-              },
-          })
-          vim.keymap.set("n", "<space>gd", vim.lsp.buf.definition, { silent = true })
-      end,
-    },
-    {
-        "stevearc/conform.nvim",
-        config = function()
-            require("conform").formatters.stylua = {
-                prepend_args = { "--indent-type", "spaces" },
-            }
-            local frontendSetup = { "prettier" }
-            require("conform").setup({
-                format_on_save = {
-                    timeout_ms = 2500,
-                    lsp_fallback = true,
-                },
-                formatters_by_ft = {
-                    lua = { "stylua" },
-                    -- Use a sub-list to run only the first available formatter
-                    javascript = frontendSetup,
-                    typescript = frontendSetup,
-                    typescriptreact = frontendSetup,
-                    javascriptreact = frontendSetup,
-                },
-            })
+    formatting = {
+        format = function(entry, vim_item)
+            vim_item.kind = lspkind.presets.default[vim_item.kind] .. " " .. vim_item.kind
+            vim_item.menu = ({
+                buffer = "[Buffer]",
+                nvim_lsp = "[LSP]",
+                nvim_lua = "[Lua]",
+                latex_symbols = "[Latex]",
+                nvim_cmp_hs_translation_source = "[Translation]",
+            })[entry.source.name]
+            return vim_item
         end,
     },
 })
 
+require("lspsaga").setup({
+    code_action = {
+        extend_gitsigns = true,
+        num_shortcut = true,
+        keys = { quit = "<esc>", exec = "<CR>" },
+    },
+    symbol_in_winbar = { enable = false },
+})
 
--- Define the ClaudeFile command
+require("lualine").setup({
+    options = {
+        theme = "onedark",
+        component_separators = "|",
+        section_separators = { left = "", right = "" },
+    },
+    sections = {
+        lualine_a = { { "mode", separator = { left = "" }, right_padding = 2 } },
+        lualine_b = { function() return vim.fn.expand("%:~:.") end, "branch" },
+        lualine_x = {},
+        lualine_y = { "filetype", "diff", "progress" },
+        lualine_z = { { "location", separator = { right = "" }, left_padding = 2 } },
+    },
+    inactive_sections = {
+        lualine_a = { "filename" },
+        lualine_b = {},
+        lualine_c = {},
+        lualine_x = {},
+        lualine_y = {},
+        lualine_z = { "location" },
+    },
+    tabline = {},
+    extensions = {},
+})
+
+require("ts-comments").setup({})
+
+require("alpha").setup(require("alpha.themes.startify").config)
+
+require("telescope").setup({
+    defaults = { wrap_results = true },
+})
+
+require("todo-comments").setup({})
+
+-- bend.nvim MUST be set up before typescript-tools
+local bend = require("bend")
+bend.setup({ v2 = true })
+require("typescript-tools").setup({
+    settings = {
+        tsserver_path = bend.getTsServerPathForCurrentFile(),
+    },
+})
+vim.keymap.set("n", "<space>gd", vim.lsp.buf.definition, { silent = true })
+
+require("conform").formatters.stylua = {
+    prepend_args = { "--indent-type", "spaces" },
+}
+local frontendSetup = { "prettier" }
+require("conform").setup({
+    format_on_save = {
+        timeout_ms = 2500,
+        lsp_fallback = true,
+    },
+    formatters_by_ft = {
+        lua = { "stylua" },
+        javascript = frontendSetup,
+        typescript = frontendSetup,
+        typescriptreact = frontendSetup,
+        javascriptreact = frontendSetup,
+    },
+})
+
 vim.api.nvim_create_user_command("ClaudeFile", function()
     local file_path = vim.fn.expand("%:p")
-    local message = "I am looking at file: " .. file_path
-    local cmd = "claude " .. vim.fn.shellescape(message)
-    
-    -- Create a vertical split first
+    local cmd = "claude " .. vim.fn.shellescape("I am looking at file: " .. file_path)
     vim.cmd("vsplit")
-    -- Open terminal in the new split
     vim.cmd("terminal " .. cmd)
-    -- Start in insert mode
     vim.cmd("startinsert")
 end, {})
 
--- Define the ClaudeLines command (works on visual selection)
 vim.api.nvim_create_user_command("ClaudeLines", function()
-    -- Get the start and end line numbers of the visual selection
     local start_line = vim.fn.line("'<")
     local end_line = vim.fn.line("'>")
     local file_path = vim.fn.expand("%:p")
-    
-    local message = "I am looking at file: " .. file_path .. ", from line " .. start_line .. " to line " .. end_line
-    local cmd = "claude " .. vim.fn.shellescape(message)
-    
-    -- Create a vertical split first
+    local msg = "I am looking at file: " .. file_path .. ", from line " .. start_line .. " to line " .. end_line
+    local cmd = "claude " .. vim.fn.shellescape(msg)
     vim.cmd("vsplit")
-    -- Open terminal in the new split
     vim.cmd("terminal " .. cmd)
-    -- Start in insert mode
     vim.cmd("startinsert")
-end, {range = true})
-
+end, { range = true })
 
 require("settings")
