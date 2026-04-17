@@ -22,10 +22,8 @@ vim.pack.add({
 
     -- Git
     "https://github.com/lewis6991/gitsigns.nvim",
-    "https://github.com/FabijanZulj/blame.nvim",
 
     -- LSP
-    "https://github.com/neovim/nvim-lspconfig",
     { src = "https://github.com/j-hui/fidget.nvim", version = "legacy" },
 
     -- Formatting
@@ -70,7 +68,7 @@ require("which-key").add({
         end,
         desc = "Find File",
     },
-    { "<leader>gb", "<cmd>BlameToggle<cr>", desc = "Git Blame" },
+    { "<leader>gb", "<cmd>Gitsigns blame<cr>", desc = "Git Blame" },
     {
         "<leader>gt",
         function() require("hubspot-js-utils").test_file() end,
@@ -116,17 +114,10 @@ require("which-key").add({
 
 require("hubspot-js-utils").setup({})
 
-require("blame").setup({
-    mappings = {
-        commit_info = "K",
-        stack_push = "l",
-        stack_pop = "h",
-        show_commit = "<CR>",
-        close = { "<esc>", "q" },
-    },
+require("gitsigns").setup({
+    current_line_blame = true,
+    current_line_blame_opts = { delay = 500 },
 })
-
-require("gitsigns").setup()
 
 require("nvim-treesitter").install({
     "bash", "c", "css", "fish", "html", "java", "javascript", "json",
@@ -143,11 +134,23 @@ vim.api.nvim_create_autocmd("FileType", {
 })
 
 vim.o.completeopt = "menu,menuone,noselect,fuzzy,popup"
+vim.diagnostic.config({
+    severity_sort = true,
+    virtual_text = { prefix = "●" },
+})
 vim.api.nvim_create_autocmd("LspAttach", {
     callback = function(ev)
         local client = vim.lsp.get_client_by_id(ev.data.client_id)
-        if client and client:supports_method("textDocument/completion") then
+        if not client then return end
+        if client:supports_method("textDocument/completion") then
             vim.lsp.completion.enable(true, client.id, ev.buf, { autotrigger = true })
+        end
+        if client:supports_method("textDocument/inlayHint") then
+            vim.lsp.inlay_hint.enable(true, { bufnr = ev.buf })
+        end
+        if client:supports_method("textDocument/foldingRange") then
+            vim.wo[0][0].foldexpr = "v:lua.vim.lsp.foldexpr()"
+            vim.wo[0][0].foldmethod = "expr"
         end
     end,
 })
@@ -160,7 +163,7 @@ end, { expr = true })
 
 require("lualine").setup({
     options = {
-        theme = "onedark",
+        theme = "auto",
         component_separators = "|",
         section_separators = { left = "", right = "" },
     },
@@ -210,7 +213,7 @@ local frontendSetup = { "prettier" }
 require("conform").setup({
     format_on_save = {
         timeout_ms = 2500,
-        lsp_fallback = true,
+        lsp_format = "fallback",
     },
     formatters_by_ft = {
         lua = { "stylua" },
@@ -220,6 +223,8 @@ require("conform").setup({
         javascriptreact = frontendSetup,
     },
 })
+
+vim.api.nvim_create_user_command("PackUpdate", function() vim.pack.update() end, {})
 
 vim.api.nvim_create_user_command("ClaudeFile", function()
     local file_path = vim.fn.expand("%:p")

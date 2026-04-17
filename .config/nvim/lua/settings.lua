@@ -1,27 +1,16 @@
 vim.o.updatetime = 200
 vim.o.swapfile = false
-vim.o.termguicolors = true
 vim.opt.list = true
 vim.opt.listchars = { space = "·" }
 vim.opt.scrolloff = 8
--- vim.o.colorcolumn = 80
--- vim.o.signcolumn = yes
-vim.o.hidden = true
-vim.wo.wrap = false
-vim.o.encoding = "utf-8"
-vim.o.fileencoding = "utf-8"
-vim.o.ruler = true
--- vim.o.cmdheight = 1
-vim.o.mouse = "a"
+vim.o.signcolumn = "yes"
+vim.o.wrap = false
 vim.o.splitbelow = true
 vim.o.splitright = true
 vim.o.conceallevel = 0
 vim.o.tabstop = 2
 vim.o.shiftwidth = 2
-vim.o.smarttab = true
 vim.o.expandtab = true
-vim.o.smartindent = true
-vim.o.autoindent = true
 vim.o.number = true
 vim.o.relativenumber = true
 vim.o.cursorline = true
@@ -36,7 +25,6 @@ vim.o.writebackup = false
 vim.o.timeoutlen = 500
 vim.o.ttimeoutlen = 50
 vim.o.clipboard = "unnamedplus"
-vim.o.laststatus = 3 -- have a single global statusline, rather than one for every window
 vim.o.winbar = "%=%m %f"
 vim.o.winborder = "single"
 
@@ -59,24 +47,6 @@ end
 vim.keymap.set("n", "<leader>_", function() resize_width(-5) end, { silent = true })
 vim.keymap.set("n", "<leader>+", function() resize_width(5) end, { silent = true })
 
--- disable unused builtin plugins
-vim.g.loaded_gzip = 1
-vim.g.loaded_zip = 1
-vim.g.loaded_zipPlugin = 1
-vim.g.loaded_tar = 1
-vim.g.loaded_tarPlugin = 1
-
-vim.g.loaded_getscript = 1
-vim.g.loaded_getscriptPlugin = 1
-vim.g.loaded_vimball = 1
-vim.g.loaded_vimballPlugin = 1
-vim.g.loaded_2html_plugin = 1
-
-vim.g.loaded_matchit = 1
+-- matchparen is load-bearing-ish; disabling skips the highlight-matching-bracket feature
 vim.g.loaded_matchparen = 1
-vim.g.loaded_logiPat = 1
-vim.g.loaded_rrhelper = 1
-
--- vim.g.loaded_netrw = 1
--- vim.g.loaded_netrwPlugin = 1
--- vim.g.loaded_netrwSettings = 1
+vim.g.loaded_matchit = 1
