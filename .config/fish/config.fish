@@ -6,6 +6,7 @@ set -q XDG_CACHE_HOME; or set XDG_CACHE_HOME $HOME/.cache
 
 set -gx NPM_PATH (which npm)
 set -gx EDITOR nvim
+set -gx CLAUDE_CODE_NO_FLICKER 1
 
 
 function ll

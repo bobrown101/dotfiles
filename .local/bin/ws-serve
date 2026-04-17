@@ -1,0 +1,177 @@
+#!/usr/bin/env fish
+# ws-serve: Wrapper for bend reactor serve that ensures cleanup on parent death.
+#
+# Usage: ws-serve <workspace-name> <bend-command...>
+#
+# Two cleanup mechanisms:
+#   1. Signal trap: if Claude (or /ws down via pkill) sends SIGTERM/SIGHUP/SIGINT,
+#      the trap fires and kills the bend tree before exiting.
+#   2. Orphan poll: every 5s, checks if PPID has become 1 (reparented to launchd).
+#      If so, Claude is gone — kills the bend tree and exits.
+#
+# For /ws down: `pkill -TERM -f "ws-serve <name> "` triggers cleanup via trap.
+# For user quitting Claude: orphan poll catches it as a fallback.
+
+set -g WS_NAME $argv[1]
+set -e argv[1]
+set -g WS_DIR "$HOME/src/workspaces/$WS_NAME"
+set -g LOG_FILE "$HOME/.ws-serve.log"
+set -g SERVE_LOG "$WS_DIR/.serve.log"
+set -g BEND_PID ""
+set -g MONITOR_PID ""
+set -g WRAPPER_PID %self
+
+function log
+    set -l ts (date '+%Y-%m-%d %H:%M:%S')
+    echo "[$ts] [ws-serve/$WS_NAME] (pid=$WRAPPER_PID) $argv" >> $LOG_FILE
+end
+
+function kill_tree
+    set -l pid $argv[1]
+    set -l sig (test (count $argv) -ge 2; and echo $argv[2]; or echo TERM)
+    set -l children (pgrep -P $pid 2>/dev/null)
+    for child in $children
+        log "kill_tree: recursing into child pid=$child (parent=$pid) with SIG$sig"
+        kill_tree $child $sig
+    end
+    if kill -0 $pid 2>/dev/null
+        log "kill_tree: sending SIG$sig to pid=$pid"
+        kill -s $sig $pid 2>/dev/null
+    else
+        log "kill_tree: pid=$pid already dead, skipping"
+    end
+end
+
+function cleanup
+    set -l reason (test (count $argv) -ge 1; and echo $argv[1]; or echo "unknown")
+    log "cleanup: triggered (reason=$reason)"
+
+    if test -z "$BEND_PID"
+        log "cleanup: no BEND_PID set, nothing to kill"
+        return
+    end
+
+    if not kill -0 $BEND_PID 2>/dev/null
+        log "cleanup: bend pid=$BEND_PID already dead"
+        return
+    end
+
+    log "cleanup: killing bend tree (root pid=$BEND_PID) with SIGTERM"
+    kill_tree $BEND_PID TERM
+
+    log "cleanup: waiting 3s for graceful shutdown..."
+    sleep 3
+
+    if kill -0 $BEND_PID 2>/dev/null
+        log "cleanup: bend pid=$BEND_PID still alive after SIGTERM, sending SIGKILL"
+        kill_tree $BEND_PID 9
+        sleep 1
+    end
+
+    if kill -0 $BEND_PID 2>/dev/null
+        log "cleanup: WARNING — bend pid=$BEND_PID survived SIGKILL, giving up"
+    else
+        log "cleanup: bend tree fully dead"
+    end
+end
+
+function on_signal --on-signal SIGTERM
+    log "signal: caught SIGTERM"
+    cleanup "signal SIGTERM"
+    log "signal: exiting after SIGTERM cleanup"
+    exit 0
+end
+
+function on_signal_hup --on-signal SIGHUP
+    log "signal: caught SIGHUP"
+    cleanup "signal SIGHUP"
+    log "signal: exiting after SIGHUP cleanup"
+    exit 0
+end
+
+function on_signal_int --on-signal SIGINT
+    log "signal: caught SIGINT"
+    cleanup "signal SIGINT"
+    log "signal: exiting after SIGINT cleanup"
+    exit 0
+end
+
+# --- Start ---
+log "--- ws-serve starting ---"
+log "workspace: $WS_NAME"
+log "workspace dir: $WS_DIR"
+log "wrapper pid: $WRAPPER_PID"
+log "parent pid (Claude/shell): "(ps -o ppid= -p $WRAPPER_PID 2>/dev/null | string trim)
+log "command: $argv"
+log "PATH: $PATH"
+
+# Truncate the serve log so ws-status reads fresh output
+: > $SERVE_LOG
+log "serve log: $SERVE_LOG"
+
+# Launch bend serve in background, teeing output to the serve log.
+# ws-status reads this file; the background agent never needs TaskOutput.
+# Using begin/end so kill_tree can recurse into the pipeline's children.
+begin; $argv 2>&1 | tee -a $SERVE_LOG; end &
+set -g BEND_PID (jobs -lp | tail -1)
+log "bend launched: pid=$BEND_PID"
+
+# --- Orphan poll loop ---
+# Run in background: check every 5s if we've been orphaned (PPID=1).
+# If so, Claude is gone and no signal was delivered — clean up ourselves.
+fish -c "
+    set -l bend_pid $BEND_PID
+    set -l wrapper_pid $WRAPPER_PID
+    set -l ws_name $WS_NAME
+    set -l log_file $LOG_FILE
+    set -l original_ppid (ps -o ppid= -p \$wrapper_pid 2>/dev/null | string trim)
+
+    function _log
+        set -l ts (date '+%Y-%m-%d %H:%M:%S')
+        echo \"[\$ts] [ws-serve/\$ws_name] (pid=\$wrapper_pid) \$argv\" >> \$log_file
+    end
+
+    _log 'orphan-monitor: started (watching wrapper pid='\$wrapper_pid' parent='\$original_ppid')'
+
+    while true
+        sleep 5
+
+        if not kill -0 \$bend_pid 2>/dev/null
+            _log 'orphan-monitor: bend pid='\$bend_pid' is dead, exiting monitor'
+            break
+        end
+
+        set -l current_ppid (ps -o ppid= -p \$wrapper_pid 2>/dev/null | string trim)
+        if test \"\$current_ppid\" = 1
+            _log 'orphan-monitor: detected orphan! wrapper ppid is now 1 (was '\$original_ppid')'
+            _log 'orphan-monitor: Claude is gone — killing bend tree'
+            # Kill bend tree directly since we can't call the wrapper's cleanup
+            for child in (pgrep -P \$bend_pid 2>/dev/null)
+                kill -TERM \$child 2>/dev/null
+            end
+            kill -TERM \$bend_pid 2>/dev/null
+            sleep 3
+            for child in (pgrep -P \$bend_pid 2>/dev/null)
+                kill -9 \$child 2>/dev/null
+            end
+            kill -9 \$bend_pid 2>/dev/null
+            _log 'orphan-monitor: cleanup done, exiting'
+            exit 0
+        end
+    end
+" &
+set -g MONITOR_PID (jobs -lp | tail -1)
+log "orphan-monitor launched: pid=$MONITOR_PID"
+
+# Wait for bend to exit naturally (or for a signal to interrupt us)
+log "waiting for bend pid=$BEND_PID to exit..."
+wait $BEND_PID 2>/dev/null
+set -l bend_exit $status
+log "bend exited: code=$bend_exit"
+
+# Kill the monitor since bend is done
+kill $MONITOR_PID 2>/dev/null
+wait $MONITOR_PID 2>/dev/null
+
+log "--- ws-serve exiting (bend exit code=$bend_exit) ---"
+exit $bend_exit

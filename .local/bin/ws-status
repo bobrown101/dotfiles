@@ -1,0 +1,198 @@
+#!/usr/bin/env python3
+"""ws-status: Parse bend serve log into structured JSON.
+
+Usage:
+    ws-status <workspace-name>
+
+Reads the tail of the serve log for the given workspace and outputs a JSON
+status summary. Designed to be called repeatedly by a monitoring agent.
+"""
+
+import json
+import os
+import re
+import sys
+import time
+
+TAIL_BYTES = 50_000  # last 50KB is plenty for current state
+
+
+def read_tail(path, nbytes=TAIL_BYTES):
+    try:
+        size = os.path.getsize(path)
+    except OSError:
+        return ""
+    with open(path, "r", errors="replace") as f:
+        if size > nbytes:
+            f.seek(size - nbytes)
+            f.readline()  # skip partial line
+        return f.read()
+
+
+# --- Patterns (match what bend reactor serve emits) ---
+
+PROGRESS_RE = re.compile(
+    r"\[(\S+)\s+serve-rspack\]\s+(\d+)%\s+(\w+)"
+)
+COMPILED_RE = re.compile(
+    r"\[(\S+)\s+serve-rspack\]\s+compiled successfully"
+)
+COMPILING_RE = re.compile(
+    r"\[(\S+)\s+serve-rspack\]\s+compiling\.\.\."
+)
+TEST_PROGRESS_RE = re.compile(
+    r"\[(\S+)\s+run-tests\]\s+(\d+)%\s+of tests run\s+\((\d+)/(\d+)\)"
+)
+TEST_DONE_RE = re.compile(
+    r"\[(\S+)\s+run-tests\]\s+Executed\s+(\d+)\s+of\s+(\d+)"
+)
+
+FATAL_ERRORS = [
+    ("EADDRINUSE", re.compile(r"EADDRINUSE")),
+    ("FATAL", re.compile(r"FATAL")),
+    ("ENOENT", re.compile(r"ENOENT")),
+    ("COMMAND_NOT_FOUND", re.compile(r"command not found")),
+]
+WARN_ERRORS = [
+    ("MODULE_NOT_FOUND", re.compile(r"Cannot find module")),
+    ("ERR", re.compile(r"ERR!")),
+]
+
+
+def parse_serve_log(text):
+    lines = text.split("\n")
+
+    # Per-package state — last-writer-wins so we reflect current state
+    packages = {}
+    errors = []
+
+    for line in lines:
+        m = COMPILED_RE.search(line)
+        if m:
+            pkg = m.group(1)
+            packages[pkg] = {
+                "name": pkg, "progress": 100,
+                "phase": "done", "compiled": True,
+            }
+            continue
+
+        m = COMPILING_RE.search(line)
+        if m:
+            pkg = m.group(1)
+            packages[pkg] = {
+                "name": pkg, "progress": 0,
+                "phase": "compiling", "compiled": False,
+            }
+            continue
+
+        m = PROGRESS_RE.search(line)
+        if m:
+            pkg, pct, phase = m.group(1), int(m.group(2)), m.group(3)
+            packages[pkg] = {
+                "name": pkg, "progress": pct,
+                "phase": phase, "compiled": False,
+            }
+            continue
+
+        m = TEST_PROGRESS_RE.search(line)
+        if m:
+            pkg = m.group(1)
+            entry = packages.setdefault(pkg, {"name": pkg, "compiled": False})
+            entry["testProgress"] = int(m.group(2))
+            entry["testsRun"] = int(m.group(3))
+            entry["testsTotal"] = int(m.group(4))
+            continue
+
+        m = TEST_DONE_RE.search(line)
+        if m:
+            pkg = m.group(1)
+            entry = packages.setdefault(pkg, {"name": pkg, "compiled": False})
+            entry["testProgress"] = 100
+            entry["testsRun"] = int(m.group(2))
+            entry["testsTotal"] = int(m.group(3))
+            continue
+
+        for err_type, pattern in FATAL_ERRORS:
+            if pattern.search(line):
+                errors.append({
+                    "type": err_type,
+                    "fatal": True,
+                    "line": line.strip()[:300],
+                })
+                break
+        else:
+            for err_type, pattern in WARN_ERRORS:
+                if pattern.search(line):
+                    errors.append({
+                        "type": err_type,
+                        "fatal": False,
+                        "line": line.strip()[:300],
+                    })
+                    break
+
+    pkg_list = sorted(packages.values(), key=lambda p: p["name"])
+    all_ready = len(pkg_list) > 0 and all(p.get("compiled") for p in pkg_list)
+    has_fatal = any(e["fatal"] for e in errors)
+
+    if has_fatal:
+        state = "error"
+    elif all_ready:
+        state = "ready"
+    elif pkg_list:
+        state = "compiling"
+    else:
+        state = "starting"
+
+    return {
+        "state": state,
+        "packages": pkg_list,
+        "errors": errors[-10:],
+        "allReady": all_ready,
+    }
+
+
+def main():
+    if len(sys.argv) != 2:
+        print(f"Usage: {sys.argv[0]} <workspace-name>", file=sys.stderr)
+        sys.exit(1)
+
+    name = sys.argv[1]
+    log_path = os.path.expanduser(f"~/src/workspaces/{name}/.serve.log")
+
+    if not os.path.exists(log_path):
+        json.dump({
+            "state": "not_running",
+            "packages": [],
+            "errors": [{"type": "NO_LOG", "fatal": True,
+                         "line": f"No serve log at {log_path}"}],
+            "allReady": False,
+        }, sys.stdout, indent=2)
+        print()
+        sys.exit(0)
+
+    mtime = os.path.getmtime(log_path)
+    stale_seconds = time.time() - mtime
+
+    text = read_tail(log_path)
+    result = parse_serve_log(text)
+    result["logPath"] = log_path
+    result["staleSeconds"] = round(stale_seconds, 1)
+
+    # If the log hasn't been written to in >60s and serve never reached
+    # "ready" or "compiling", it probably crashed during startup. But if
+    # serve is already ready (or actively compiling), silence is normal —
+    # bend only writes when there's activity (compilation, file changes, tests).
+    if stale_seconds > 60 and result["state"] == "starting":
+        result["state"] = "stale"
+        result["errors"].append({
+            "type": "STALE_LOG",
+            "fatal": True,
+            "line": f"Log not updated in {round(stale_seconds)}s and no packages detected — serve may have crashed",
+        })
+
+    json.dump(result, sys.stdout, indent=2)
+    print()
+
+
+if __name__ == "__main__":
+    main()

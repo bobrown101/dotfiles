@@ -1,347 +1,447 @@
 ---
 name: ws
 description: Manage parallel multi-repo development workspaces using git worktrees, tmux, and bend serve. Use when the user wants to create, update, tear down, or inspect workspaces, or mentions workspaces, worktrees, or parallel dev environments.
-argument-hint: "[up <name> <repo[:branch]...> | down <name> | nuke <name> | rm <name> <repo...> | ls | info <name> | attach <name>]"
+argument-hint: "up <name> <repo[:branch]...>"
 ---
 
 # Workspace Manager
 
 Manage isolated multi-repo development workspaces. Each workspace gets its own git clones, bend serve instance (with a unique subdomain), and tmux session.
 
-## Design principle: fast handoff
+Two Claude instances are involved:
+- **Creator**: the Claude instance where the user asks for a workspace. Reads this entire file. Does minimal work: validates inputs, writes the handoff prompt, launches tmux via `ws-init`.
+- **Workspace Claude**: the Claude instance that runs inside the workspace tmux session. Only sees the handoff prompt (Section 3 below). Does all the real work: cloning, installing, discovery, serve, and user interaction.
 
-The **creator** (the Claude instance where the user asks for a workspace) does the absolute minimum: validate inputs, create the directory, launch the tmux session, and hand off to the **workspace Claude** (the Claude instance that runs inside the workspace tmux session). The workspace Claude handles everything else — cloning, installing, package discovery, serve, and asking the user any follow-up questions. This keeps the creator fast and lets the workspace Claude own its own environment.
+---
+
+# Section 1: Shared rules (creator + workspace Claude)
+
+These rules apply to BOTH the creator and the workspace Claude. The creator reads them here; the workspace Claude receives them in the handoff prompt.
+
+## Critical safety rules
+
+- **NEVER use `pkill -f` with the workspace name or workspace path.** This WILL match and kill the Claude process itself (its args contain the workspace name). To kill serve processes, use the "Stopping serve" procedure which targets `bend-instance=<name>` specifically.
+- **NEVER delete branches without explicit user confirmation.** Only the `nuke` operation deletes branches, and it must confirm first.
+- **NEVER do setup work from the creator.** After launching ws-init, the creator is done. All cloning, installing, and serve is the workspace Claude's job.
 
 ## Conventions
 
 - **Workspace root**: `~/src/workspaces/<name>/`
-- **Name normalization**: always replace spaces with hyphens in the workspace name before using it anywhere (directory paths, tmux session, prompt file, serve subdomain, branch names). E.g. `"search endpoint migration"` → `"search-endpoint-migration"`.
-- **Source repos**: `~/src/<repo>/` (these must exist before cloning)
-- **Clones**: `~/src/workspaces/<name>/<repo>/` (cloned from the repo's GitHub remote URL)
+- **Name normalization**: replace spaces with hyphens everywhere (directory paths, tmux session, prompt file, serve subdomain, branch names). E.g. `"search endpoint migration"` -> `"search-endpoint-migration"`.
+- **Source repos**: `~/src/<repo>/` (must exist before cloning)
+- **Clones**: `~/src/workspaces/<name>/<repo>/`
 - **Branch default**: `brbrown/<workspace-name>` (override per-repo with `repo:branch` syntax)
-- **Serve URL**: `https://<name>.local.app.hubspotqa.com`
-- **Test URL base**: `https://<name>.local.hsappstatic.net`
+- **Serve URL**: `https://<name>.local.<lbPrefix>.<domain><historyBasename>` (resolved from deploy config + quartz config; see "URL resolution")
+- **Test URL**: `https://<name>.local.hsappstatic.net/<package>/static/test/test.html?spec=`
 - **Portal ID**: `103830646`
-- **Shell**: The user's shell is fish. All commands sent to tmux windows run in fish. Use `env VAR=value command` syntax instead of `VAR=value command`.
-- **No metadata files** — the filesystem IS the state. List `~/src/workspaces/` to see workspaces, list subdirs with `.git` dirs to see repos.
+- **Shell**: fish. Use `env VAR=value command` syntax, not `VAR=value command`.
+- **No metadata files** -- the filesystem IS the state.
+- **Parent/child workspaces**: When a workspace is created from inside another workspace, its tmux session is named `<parent>/<child>` (e.g., `streaming-object-updates/gantt-streaming`). This makes child workspaces visually group under their parent in tmux's session picker (`prefix + s`). The workspace directory remains flat at `~/src/workspaces/<child>/`.
+- **Git**: Use `git -C <path>` instead of `cd <path> && git ...` to avoid compound-command permission prompts.
+- **Bash round trips**: Chain independent commands with `&&` into a single Bash call where possible. Each separate invocation requires a permission check.
+- **Serve session**: `workspaces-serve-commands` (shared tmux session, one window per workspace's serve command)
 
-## Operations
+## Discovery cache
 
-When the user invokes this skill (via `/ws` or natural language like "spin up a workspace"), determine which operation they want and execute it.
+File: `~/src/workspaces/workspace-discovery-cache.json`
+
+Shared across all workspaces. Maps repo names to discovery results:
+
+```json
+{
+  "crm-object-table": {
+    "cachedAt": "2026-04-01T15:30:00Z",
+    "remote": "git@github.com:HubSpotEngineering/crm-object-table.git",
+    "type": "library",
+    "packages": [
+      {"name": "crm-object-table", "isDefault": true},
+      {"name": "crm-object-table-kitchen-sink", "isDefault": true},
+      {"name": "crm-object-table-storybook", "isDefault": false},
+      {"name": "crm-object-table-acceptance-tests", "isDefault": false}
+    ],
+    "urls": {
+      "crm-object-table-kitchen-sink": {"lb": "app", "basename": "/crm-object-table-kitchen-sink/:portalId/"}
+    }
+  }
+}
+```
+
+**Creator uses it** to skip `git remote get-url` calls (checks `remote` field).
+**Workspace Claude uses it** to skip package discovery (checks `type` and `packages` fields). If a repo is not cached or only has `remote`, run full discovery and **merge** results back (don't overwrite the file).
+
+The `isDefault` field records per-repo defaults before cross-repo heuristics. To invalidate, delete the repo's key from the JSON.
+
+---
+
+# Section 2: Creator instructions
+
+The creator reads this section to handle user requests. The workspace Claude never sees this section.
+
+## Routing
+
+When the user invokes this skill (via `/ws` or natural language like "spin up a workspace"), create or update a workspace as described below.
 
 If the user provides repo names in natural language (e.g., "Customer Data Table"), match them against directory names in `~/src/` (e.g., `customer-data-table`). Confirm the match with the user if ambiguous.
 
-### up — Create or update a workspace
+## Creating or updating a workspace
 
 `/ws up <name> <repo[:branch]...>`
 
-This is idempotent. Works for both new and existing workspaces.
+Idempotent. Works for both new and existing workspaces.
+
+**Detecting parent workspace (for sub-workspaces):**
+
+Before creating a workspace, check if the creator is running inside an existing workspace:
+1. Check if the current working directory starts with `~/src/workspaces/`. If so, extract the workspace name from the path (the directory immediately under `workspaces/`).
+2. Alternatively, check if the current tmux session name matches a workspace directory in `~/src/workspaces/`.
+3. If a parent is detected, the new workspace is a **child workspace**. Pass `--parent <parent-name>` to `ws-init` (step 4 below). The tmux session will be named `<parent>/<child>`, making it group under the parent in the session picker.
+4. Include the parent in the confirmation plan so the user sees the relationship.
 
 **Creating a new workspace:**
 
-The creator does only these steps:
+1. **Validate repos and resolve remote URLs.** Check the discovery cache for `remote` URLs first. For uncached repos, resolve via `git -C ~/src/<repo> remote get-url origin`. Stop and report if any repo fails validation.
 
-1. **Validate repos and resolve remote URLs in a single command** for each repo:
-   ```
-   git -C ~/src/<repo1> remote get-url origin && git -C ~/src/<repo2> remote get-url origin
-   ```
-   Stop and report if any fail.
-
-2. **Present a confirmation plan before executing.** After validating repos (step 1), present a single summary and ask the user to confirm or adjust. The plan should include:
-   - **Workspace name** (= tmux session name and serve subdomain)
-   - **Branch name** for each repo (default: `brbrown/<workspace-name>`, or as specified)
-   - **Repos** that will be cloned
-   - **Serve URL** (`https://<name>.local.app.hubspotqa.com`)
-
-   Format example:
+2. **Present a confirmation plan and wait for approval:**
    ```
    Here's the plan:
 
    Workspace: css-hover-cell-cleanup
+   Parent: streaming-object-updates  (or omit if no parent)
    Repos & branches:
-     customer-data-table → brbrown/css-hover-cell-cleanup
-   Serve URL: https://css-hover-cell-cleanup.local.app.hubspotqa.com
+     customer-data-table -> brbrown/css-hover-cell-cleanup
+   Serve URL: resolved after setup (depends on repo's deploy config)
+   tmux session: streaming-object-updates/css-hover-cell-cleanup  (or just the name if no parent)
 
    OK to proceed, or any changes?
    ```
 
-   Wait for explicit approval before proceeding.
+3. **Write the handoff prompt to `/tmp/ws-<name>-init-prompt.txt`** using the Write tool. The prompt is built by filling in Section 3's template variables (see "Building the handoff prompt" below). No escaping needed -- the Write tool handles it.
 
-3. **Write the handoff prompt to a temp file**, then **run `ws-init`** — two tool calls (sequential):
+4. **Run `~/.local/bin/ws-init <name> [--parent <parent-name>]`**. This script creates the workspace directory, writes `.claude/settings.json`, creates the tmux session (named `<parent>/<name>` if parent is provided, otherwise `<name>`), and launches the workspace Claude from the prompt file.
 
-   First, use the Write tool to write the handoff prompt (see "Claude tab launch" below) to `/tmp/ws-<name>-init-prompt.txt`. Writing to `/tmp` doesn't require approval.
+5. **Tell the user** the workspace is being set up and to switch to the tmux session (use the full session name including parent prefix if applicable). Done -- no further work.
 
-   Then run:
-   ```bash
-   ~/.local/bin/ws-init <name>
-   ```
+**Updating an existing workspace (new repos specified):**
 
-   The `ws-init` script handles everything: creating the workspace directory, writing `.claude/settings.json`, creating the tmux session/windows, and launching the workspace Claude from the prompt file. This is a single Bash call that can be auto-approved, avoiding the multiple approval prompts that mkdir-on-sensitive-paths and tmux `&&` chains would trigger.
-
-4. **Tell the user** the workspace is being set up and to switch to the `<name>` tmux session. Do NOT do any further setup work — the workspace Claude handles everything from here.
-
-**Updating an existing workspace (repos specified):**
-
-1. Determine which repos are new (not yet in workspace) and which already exist
-2. For new repos: pass them to the workspace Claude via the handoff prompt to clone
-3. For existing repos where the specified branch differs from current: ask the user to confirm the branch switch before proceeding
-4. If tmux session doesn't exist, create it
+1. Check which repos already exist in `~/src/workspaces/<name>/`
+2. For new repos: tell the user to switch to the workspace tmux session and ask the workspace Claude to clone and serve the new repos. The creator does NOT do this work itself.
+3. For existing repos where the specified branch differs from current: ask the user to confirm the branch switch
+4. If tmux session doesn't exist, create it with ws-init
 
 **Updating with no repos specified (`/ws up <name>`):**
 
-Just ensure the tmux session exists (create if needed) and tell the user to attach.
-
-### down — Tear down a workspace
-
-`/ws down <name>`
-
-1. Kill all processes referencing the workspace path:
-   ```
-   pkill -TERM -f ~/src/workspaces/<name>
-   sleep 2
-   pkill -9 -f ~/src/workspaces/<name>
-   ```
-   IMPORTANT: `tmux kill-session` alone does NOT kill bend's child processes (tsc, rspack, webpack). They detach and survive. Must pkill by workspace path BEFORE killing tmux.
-2. Kill the tmux session: `tmux kill-session -t <name>`
-3. `rm -rf ~/src/workspaces/<name>/`
-4. Report what was cleaned up
-5. **Branches are kept on the remote** — if they were pushed. Local branches are gone with the clone, which is fine.
-
-### nuke — Tear down and delete branches
-
-`/ws nuke <name>`
-
-1. BEFORE doing anything, gather branch info for all repos in the workspace (repo name, branch name)
-2. Show the user what will be deleted and **ask for confirmation**. Do NOT proceed without explicit yes.
-3. Run the full `down` procedure
-4. Delete the branch from each source repo (in case it exists there too): `git -C ~/src/<repo> branch -D <branch>` (ignore errors if branch doesn't exist)
-5. Optionally delete remote branches if pushed: `git -C ~/src/<repo> push origin --delete <branch>` (ask user first)
-6. Report which branches were deleted
-
-### rm — Remove repos from a workspace
-
-`/ws rm <name> <repo...>`
-
-1. For each repo: `rm -rf ~/src/workspaces/<name>/<repo>`
-2. Restart serve (see below)
-3. Report what was removed
-
-### ls — List workspaces
-
-`/ws ls`
-
-1. List directories in `~/src/workspaces/`
-2. For each, check if a tmux session exists: `tmux has-session -t <name>`
-3. List subdirectories with `.git` dirs (these are the repos)
-4. Display each workspace with running/stopped status and its repos
-
-### info — Show workspace details
-
-`/ws info <name>`
-
-1. List repos in the workspace (subdirs with `.git` dirs)
-2. For each repo, get current branch: `git -C <path> branch --show-current`
-3. Show: workspace name, root path, each repo with its branch
-4. Show the base URL: `https://<name>.local.app.hubspotqa.com`
-5. Try to infer app URLs for each repo (see "URL inference" below)
-6. Show helpful commands: how to add repos, tear down, attach
-
-### attach
-
-`/ws attach <name>`
-
-Claude cannot perform an interactive tmux attach. Instead, tell the user to run:
-- If inside tmux: `tmux switch-client -t <name>`
-- If outside tmux: `tmux attach -t <name>`
+Ensure the tmux session exists (create if needed) and tell the user to attach.
 
 ## tmux layout
 
-Two windows per workspace:
+Two tmux sessions are involved:
 
-1. **shell** — empty shell for manual work. Working directory: `~/src/workspaces/<name>/`
-2. **<name>** — starts a Claude Code instance (window and session both named after the workspace). Working directory: `~/src/workspaces/<name>/`
+1. **`<name>`** or **`<parent>/<name>`** (tmux session) — Claude Code instance. Working directory: `~/src/workspaces/<name>/`. If the workspace was created from inside another workspace, the session is named `<parent>/<name>` so it groups under the parent in the tmux session picker.
+2. **`workspaces-serve-commands:<name>`** (tmux window in shared session) — bend reactor serve for this workspace
 
-Serve runs as a Claude Code background task owned by the workspace Claude (see "Serve command" below).
+Creation is handled by `~/.local/bin/ws-init <name> [--parent <parent>]`. The script creates both the workspace tmux session and the serve window in the shared `workspaces-serve-commands` session.
 
-Creation is handled by `~/.local/bin/ws-init <name>` — see step 3 of "up" above. The script creates the tmux session, windows, and launches the workspace Claude.
+## Building the handoff prompt
 
-### Claude tab launch
+Write the handoff prompt to `/tmp/ws-<name>-init-prompt.txt` using the Write tool.
 
-Always pass `--name <workspace-name>` so the Claude session is named after the workspace.
+The prompt has two parts:
+1. **Header**: workspace-specific variables (name, repo list with remotes and branches)
+2. **Body**: the full text of Section 3 below, included verbatim
 
-The workspace Claude instance is responsible for ALL setup: cloning repos, installing deps, discovering packages, starting serve, and reporting workspace details. The creator passes all necessary context in the initial prompt.
-
-**Handoff prompt template** (written to `/tmp/ws-<name>-init-prompt.txt` by the creator):
+Template:
 
 ```
-You are setting up the <name> workspace.
+You are setting up the <WORKSPACE_NAME> workspace.
 
-REPOS TO CLONE (clone each, then checkout the branch from origin/master):
+<if parent workspace exists: PARENT: <PARENT_WORKSPACE_NAME>>
+
+REPOS:
 <for each repo>
-  - repo: <repo-name>, remote: <remote-url>, branch: <branch-name>
+  - repo: <REPO_NAME>, remote: <REMOTE_URL>, branch: <BRANCH_NAME>
 </for each repo>
 
-SETUP STEPS:
-1. Clone each repo into ~/src/workspaces/<name>/<repo>/ from its remote URL
-2. For each clone, checkout the workspace branch: git checkout -b <branch> origin/master (if branch exists on remote, just git checkout <branch>)
-3. Run bend yarn in each clone (sequentially)
-4. Discover serveable packages and start serve (see below)
-5. Report workspace details: name, repos with branches, serve URL, app URLs
+<optional: TASK CONTEXT: <user's intent or task description>>
 
-SERVE:
-- Discover packages: list subdirs with package.json in each repo clone (exclude node_modules, target, schemas, hubspot.deploy, docs, acceptance-tests)
-- Classify repos: if <repo>.yaml exists in hubspot.deploy/ → app; if only kitchen-sink/storybook/acceptance-tests yamls → library
-- Default selection: always serve the main package; serve kitchen sinks only for libraries with no consuming app in the workspace; never serve storybooks or acceptance-tests
-- If the defaults are the only option, auto-accept. Otherwise ask the user which packages to serve.
-- Run: env BEND_WORKTREE=<name> NODE_ARGS=--max_old_space_size=16384 bend reactor serve <pkg-paths...> --update --ts-watch --enable-tools --run-tests
-- Launch serve as a background task (Bash with run_in_background: true), then verify it started
-
-WORKTREE URLS:
-The workspace name is used as a subdomain prefix on ALL local dev URLs. Examples:
-- App: https://<name>.local.app.hubspotqa.com/contacts/103830646/objects/0-1/views/all/list
-- Test runner: https://<name>.local.hsappstatic.net/<package-name>/static/test/test.html?spec=
-- Kitchen sink: https://<name>.local.app.hubspotqa.com/<repo>-kitchen-sink/103830646/
-NEVER use the non-worktree domain (local.hsappstatic.net without prefix). Always use <name>.local.hsappstatic.net or <name>.local.app.hubspotqa.com.
-
-PORTAL ID: 103830646
-
-<optional: user intent/task context>
+<paste Section 3 verbatim here>
 ```
 
-Include the user's task context or intent if they provided one (e.g., "The user wants to investigate virtualization DOM mutation performance"). This helps the workspace Claude understand what the user is working on and ask relevant follow-up questions.
+Include the user's task context if they provided one (e.g., "The user wants to investigate virtualization DOM mutation performance"). This helps the workspace Claude understand what to focus on. Include the PARENT line if the workspace was created from inside another workspace — this gives the workspace Claude context about lineage (useful for CONTEXT.md).
 
-No escaping is needed — the prompt is written to a file via the Write tool, and the `ws-init` script reads it from there. This avoids all quoting/escaping issues with tmux send-keys.
+---
 
-## Serve command
+# Section 3: Workspace Claude instructions
 
-All serve setup is handled by the **workspace Claude instance**, not the creator. The handoff prompt (see "Claude tab launch") includes instructions for the workspace Claude to follow.
+Everything below this line is included verbatim in the handoff prompt. The workspace Claude only sees this section (plus the header with repo details). This is the single source of truth for workspace setup behavior.
 
-### Package discovery and selection (workspace Claude)
+## Critical safety rules
 
-Each repo contains multiple serveable packages (main app/lib, kitchen sinks, storybooks, utility libs, etc.). Rather than serving everything, discover the available packages and let the user choose.
+- **NEVER use `pkill -f` with the workspace name or workspace path.** This WILL match and kill you (your args contain the workspace name). To kill serve processes, target `bend-instance=<WORKSPACE_NAME>` specifically (see "Stopping serve").
+- **NEVER delete git branches** unless the user explicitly asks for it.
 
-**Discovery:** For each repo clone, list subdirectories that are serveable packages:
-```bash
-ls -d ~/src/workspaces/<name>/<repo>/*/ | grep -v node_modules | grep -v target | grep -v schemas | grep -v hubspot.deploy | grep -v docs | grep -v acceptance-tests
-```
+## Conventions
 
-Each subdirectory with a `package.json` is a serveable package. Some repos are single-package (only a root `package.json`) — in that case, serve the repo root.
+- **Git**: Always use `git -C <path>` instead of `cd <path> && git ...`. Compound commands with `cd && git` trigger a security approval prompt that blocks automation.
+- **Shell**: fish. Use `env VAR=value command` syntax, not `VAR=value command`.
+- **Bash round trips**: Chain independent commands with `&&` into a single Bash call where possible — but never `cd && git` (use `git -C` instead).
 
-**Classify each repo** by checking `<clone>/hubspot.deploy/` for a deploy yaml named after the main package:
-- If `<repo>.yaml` exists (e.g., `crm-index-ui/hubspot.deploy/crm-index-ui.yaml`) → the main package is a **deployable app**
-- If only `*-kitchen-sink.yaml` / `*-storybook.yaml` / `*-acceptance-tests.yaml` exist → the main package is a **library** and the kitchen sink is its browser testing surface
+## One-pager / docs lookup rules
 
-**Selection:** Present the discovered packages to the user grouped by repo, with defaults pre-selected. Format as a checklist:
+- **During workspace setup** (cloning, installing, discovering packages, starting serve): do NOT call `get_onepager` or `search_docs`. Setup is infrastructure work, not code editing.
+- **During task investigation** after setup: only fetch one-pagers that are directly relevant to the task context (e.g. `data-fetching-client` if investigating DFC patterns). Do NOT fetch one-pagers triggered by incidental keyword matches (e.g. "acceptance-tests" appearing in a directory exclusion list).
 
-```
-Which packages do you want to serve?
+## Setup steps
 
-crm-index-ui:  (app — has its own deploy)
-  [x] crm-index-ui
+1. **Clone each repo** into `~/src/workspaces/<WORKSPACE_NAME>/<REPO_NAME>/` from its remote URL
+2. **Checkout the workspace branch**: `git -C <CLONE_PATH> checkout -b <BRANCH_NAME> origin/master` — don't check if the remote branch exists first, just run this directly. If it fails because the branch already exists, fall back to `git -C <CLONE_PATH> checkout <BRANCH_NAME>`. Always use `git -C`, never `cd && git`. Run all repo checkouts in a single Bash call chained with `&&`.
+3. **Check for repo-level CLAUDE.md**: After checkout, check if each cloned repo has a `CLAUDE.md` at its root. In the final report (step 6), note which repos have CLAUDE.md and which don't — this helps the user know where AI context is available.
+4. **Run `bend yarn`** in each clone in **parallel** (separate Bash tool calls in a single message). These are independent and safe to parallelize.
+5. **Discover packages and start serve** (see below)
+6. **Report workspace details** to the user (see "What to report" below)
 
-crm-object-table:  (library — kitchen sink is the deployable)
-  [x] crm-object-table
-  [x] crm-object-table-kitchen-sink
+## Package discovery
 
-customer-data-properties:  (library — kitchen sink is the deployable)
-  [x] customer-data-properties
-  [ ] customer-data-properties-kitchen-sink
-  [ ] property-value-citations
+Check `~/src/workspaces/workspace-discovery-cache.json` for cached results first. If a repo has `type` and `packages` in the cache, use those directly and skip discovery.
 
-(packages marked [x] are recommended — say "yes" to accept, or tell me which to add/remove)
-```
+**For uncached repos:**
 
-**Default selection heuristics:**
-
-- **Always pre-select** the main package (the one sharing the repo's name).
-- **Kitchen sinks (`*-kitchen-sink`):**
-  - If the repo is a **library** AND no app repo in the workspace consumes it → pre-select its kitchen sink (it's the only browser testing surface).
-  - If an **app repo** is in the workspace that consumes the library → do NOT pre-select the kitchen sink. The app is the testing surface.
-- **Never pre-select** `*-storybook` or `*-acceptance-tests` packages.
-- **Other utility packages** (e.g., `property-value-citations`): do NOT pre-select. The user can opt in.
-
-**Auto-accept:** If the default selection results in only the pre-selected packages and there are no additional optional packages to choose from (i.e., every discovered package is pre-selected), skip the prompt entirely and proceed with the defaults. Only prompt when there are meaningful choices to make.
-
-If the user says "all" or "everything", serve all packages. If they just confirm, use the defaults.
-
-### Building the serve command
-
-`bend reactor serve` accepts specific package paths as positional args. Pass only the selected package directories instead of the repo root.
-
-For each repo, run `bend yarn` first (in the clone dir), then build the serve command with explicit package paths:
-
-```
-env BEND_WORKTREE=<name> NODE_ARGS=--max_old_space_size=16384 bend reactor serve <pkg-path-1> <pkg-path-2> ... --update --ts-watch --enable-tools --run-tests
-```
-
-Where each `<pkg-path>` is a full path like `~/src/workspaces/<name>/<repo>/<package>/`.
-
-### Launching serve as a background task (workspace Claude)
-
-The workspace Claude instance should:
-
-1. Run `bend yarn` sequentially for each repo first (these are short-lived and should run in the foreground):
+1. List subdirectories with `package.json` (exclude `node_modules`, `target`, `schemas`, `hubspot.deploy`, `docs`, `acceptance-tests`):
    ```bash
-   cd ~/src/workspaces/<name>/<repo1> && bend yarn && cd ~/src/workspaces/<name>/<repo2> && bend yarn
+   ls -d ~/src/workspaces/<WORKSPACE_NAME>/<REPO_NAME>/*/ | grep -v node_modules | grep -v target | grep -v schemas | grep -v hubspot.deploy | grep -v docs | grep -v acceptance-tests
+   ```
+   If no subdirectories have `package.json`, the repo is single-package -- serve the repo root.
+
+2. Classify the repo by checking `<clone>/hubspot.deploy/`:
+   - `<repo>.yaml` exists -> **app** (deployable)
+   - Only `*-kitchen-sink.yaml` / `*-storybook.yaml` / `*-acceptance-tests.yaml` -> **library**
+
+3. **Resolve URLs for each package** (see "URL resolution" below). This reads deploy YAML and quartz config to determine the actual load balancer and route path for each app package.
+
+4. Write results back to `~/src/workspaces/workspace-discovery-cache.json`. Read the file first, merge your new entry (don't overwrite other repos), then write it back. Include all fields:
+   ```json
+   {
+     "<REPO_NAME>": {
+       "cachedAt": "<current ISO 8601 timestamp>",
+       "remote": "<the git remote URL from the REPOS header>",
+       "type": "library or app",
+       "packages": [
+         {"name": "<pkg>", "isDefault": true/false},
+         ...
+       ],
+       "urls": {
+         "<pkg>": {"lb": "<lb-name>", "basename": "<historyBasename>"},
+         ...
+       }
+     }
+   }
    ```
 
-2. Then launch the serve command as a background task using the Bash tool with `run_in_background: true`:
+## URL resolution
+
+For each package discovered, resolve its URL components from config files. This uses the same data sources as the deploy pipeline, so URLs stay correct when repos change their routing or load balancer.
+
+**Step 1: Read the deploy config.** Find the YAML file in `<clone>/hubspot.deploy/` whose `artifactBuildMetadata.module` matches the package name. Extract `loadBalancers[0]` (defaults to `"app"` if missing).
+
+**Step 2: Map the load balancer to a domain.** Use this mapping:
+- `"app"` → `app.hubspotqa.com`
+- `"privatehubteam"` → `private.hubteamqa.com`
+- `"tools"` → `tools.hubteamqa.com`
+- anything else → `<name>.hubteamqa.com`
+
+**Step 3: Read the quartz config.** The file is at `<clone>/<package-path>/static/__generated__/quartz/quartz.config.json`. This is generated by `bend yarn`. Read `config.type` and `config.historyBasename`.
+- If `config.type` is not `"application"`, the package has no browseable URL (it's a library).
+- If `historyBasename` is an array, use the first element.
+- If `historyBasename` contains `:portalId`, substitute with `103830646`.
+
+**Step 4: Construct the URL.**
+```
+https://<WORKSPACE_NAME>.local.<lbPrefix>.<domain><historyBasename>
+```
+
+Example: for a package with `loadBalancers: ["app"]` and `historyBasename: "/contacts/:portalId"`:
+```
+https://my-workspace.local.app.hubspotqa.com/contacts/103830646
+```
+
+**If quartz.config.json doesn't exist yet** (serve hasn't compiled), store `{"lb": "<lb-name>", "basename": null}` in the cache and note in the report that the URL will be available after serve finishes compiling.
+
+**Cache the results** in the `urls` field of the discovery cache so future workspaces for the same repo skip this work.
+
+## Package selection
+
+**Defaults:**
+- **Always pre-select** the main package (shares the repo's name)
+- **For libraries**, also pre-select `*-kitchen-sink` (it's the browser testing surface)
+- **Never pre-select** `*-storybook` or `*-acceptance-tests`
+- **Other utility packages**: don't pre-select, user can opt in
+
+**Auto-accept:** Always auto-accept the defaults and proceed without prompting. Just briefly list which packages will be served (one line) and move on. Never ask the user to confirm package selection — they can always adjust later if needed.
+
+## Starting serve
+
+1. Run `bend yarn` in each clone directory in **parallel** (separate Bash tool calls in a single message)
+
+2. Check for stale processes before starting:
    ```bash
-   Bash(command="cd ~/src/workspaces/<name> && env BEND_WORKTREE=<name> NODE_ARGS=--max_old_space_size=16384 bend reactor serve <pkg-path-1> <pkg-path-2> ... --update --ts-watch --enable-tools --run-tests 2>&1", run_in_background=true)
+   pgrep -f "bend-instance=<WORKSPACE_NAME>" 2>/dev/null && echo "STALE PROCESSES FOUND" || echo "clean"
+   ```
+   If stale, clean up (see "Stopping serve" below).
+
+3. **Send the serve command to the tmux window** in the shared `workspaces-serve-commands` session:
+   ```bash
+   tmux send-keys -t "workspaces-serve-commands:<WORKSPACE_NAME>" "env BEND_WORKTREE=<WORKSPACE_NAME> NODE_ARGS=--max_old_space_size=16384 bend reactor serve <PKG_PATH_1> <PKG_PATH_2> ... --update --ts-watch --enable-tools --run-tests" Enter
+   ```
+   Each `<PKG_PATH>` is a full path like `~/src/workspaces/<WORKSPACE_NAME>/<REPO_NAME>/<PACKAGE>/`.
+
+   The serve process runs in the tmux window, NOT as a background task of Claude. This means serve survives Claude restarts, and the user can see live output by switching to the `workspaces-serve-commands` tmux session.
+
+4. Tell the user serve is compiling and give them the URLs (see "What to report"). Also tell them they can watch live output in `workspaces-serve-commands:<WORKSPACE_NAME>`.
+
+5. **Proceed immediately** with the user's task or wait for instructions. Do NOT launch a background agent to monitor serve.
+
+## Stopping serve
+
+1. **Send Ctrl+C** to the serve tmux window and check if processes stopped:
+   ```bash
+   tmux send-keys -t "workspaces-serve-commands:<WORKSPACE_NAME>" C-c
+   ```
+2. **Wait 15 seconds**, then check:
+   ```bash
+   pgrep -f "bend-instance=<WORKSPACE_NAME>" 2>/dev/null && echo "STILL RUNNING" || echo "clean"
+   ```
+3. **If still running, repeat steps 1-2 up to 5 times** (send Ctrl+C again, wait 15 seconds, check). Sometimes the first Ctrl+C doesn't propagate to all child processes.
+4. If still running after all retries, **force kill**:
+   ```bash
+   pkill -9 -f "bend-instance=<WORKSPACE_NAME>" 2>/dev/null
+   ```
+4. When **tearing down a workspace entirely**, also kill the tmux window:
+   ```bash
+   tmux kill-window -t "workspaces-serve-commands:<WORKSPACE_NAME>" 2>/dev/null
    ```
 
-This keeps the background task owned by the long-lived workspace Claude session. The workspace Claude can monitor output, react to errors, and restart serve as needed — even after the creator Claude session is gone.
+The `bend-instance=<WORKSPACE_NAME>` pattern is safe to `pkill` — it matches only bend child processes (tsc, rspack, Chrome, etc.), NOT Claude or shell processes.
 
-### Serve health check
+## Restarting serve
 
-After starting or restarting serve, verify it's actually running:
+1. Stop serve (see above)
+2. Send the serve command to the tmux window again (see "Starting serve" step 3)
 
-1. Wait 10 seconds for the process to start: `sleep 10`
-2. Read the background task's output using `TaskOutput` with the serve task ID
-3. Check the output for problems:
-   - **Error patterns**: `Error:`, `EADDRINUSE`, `ENOENT`, `Cannot find module`, `ERR!`, `failed`, `FATAL`, `command not found`
-   - **Success patterns**: `Compiled`, `webpack`, `rspack`, `Watching for changes`, `ready`, `Built in`
-4. If errors are found:
-   - Diagnose the issue from the output (wrong paths, missing deps, syntax errors in the command, etc.)
-   - Fix the root cause (e.g., re-run `bend yarn`, correct the command)
-   - Restart serve and check again
-   - Report the issue and fix to the user
-5. If no output yet (process still starting), wait another 10 seconds and check again. Check up to 3 times total before reporting that serve is still starting and the user should check manually.
+## Worktree URLs
 
-Also use this health check after restarting serve (step 4 of "Restarting serve").
+The workspace name is a **subdomain prefix** on ALL local dev URLs. Routing is subdomain-based, NOT query-param-based.
 
-### Restarting serve
+**URL structure**: `https://<WORKSPACE_NAME>.local.<lbPrefix>.<domain><historyBasename>`
 
-When repos are added or removed from a running workspace:
+The `lbPrefix`, `domain`, and `historyBasename` come from URL resolution during package discovery (see "URL resolution" above). Use the resolved URLs from the discovery cache — do NOT hard-code paths.
 
-1. `pkill -TERM -f "BEND_WORKTREE=<name>"` then `sleep 1` then `pkill -9 -f "BEND_WORKTREE=<name>"`
-2. Launch a new background Bash task with the updated serve command (see "Launching serve as a background task")
-3. Run the serve health check (see above)
+- **Tests** (stable pattern): `https://<WORKSPACE_NAME>.local.hsappstatic.net/<PACKAGE_NAME>/static/test/test.html`
 
-Note: restart kills by `BEND_WORKTREE=<name>` (targets just serve). Full teardown kills by workspace path (targets everything).
+**WRONG** (do NOT use these formats):
+- `https://local.hubspotqa.com/contacts?__worktree=<name>` — query params do not route to worktrees
+- `https://local.hubspotqa.com/contacts` — missing workspace subdomain prefix
 
-## URL inference
+When a user asks for a URL, construct it from the cached `lb` + `basename` fields, not from assumptions about the path.
 
-The base URL is always `https://<name>.local.app.hubspotqa.com`.
+Portal ID: `103830646`
 
-For per-repo app links, try to infer the path by checking the repo:
-1. Look for kitchen sink routes: `find <clone> -path "*/kitchen-sink/*Route*" -o -name "kitchenSinkRoutes*" 2>/dev/null | head -5`
-2. Look for static config: `cat <clone>/static/staticConfig.json 2>/dev/null` or similar hubspot.deploy config files
-3. Fall back to known patterns:
-   - Kitchen sinks: `/<repo-name>-kitchen-sink/<portal-id>/`
-   - Full apps (e.g., `crm-index-ui`): `/contacts/<portal-id>/objects/0-1/views/all/list`
-4. If nothing found, just give the base URL and let the user navigate.
+## Debugging serve and process issues
 
-## Guidelines
+Serve output is in tmux session `workspaces-serve-commands`, window `<WORKSPACE_NAME>`. Capture recent output: `tmux capture-pane -t "workspaces-serve-commands:<WORKSPACE_NAME>" -p -S -50`
 
-- **Creator does minimal work**: The creator validates inputs, creates the workspace dir + settings, launches tmux, and hands off. All cloning, installing, package discovery, and serve setup is the workspace Claude's job.
-- **Minimize Bash round trips**: Chain independent commands with `&&` into a single Bash call wherever possible. Every separate Bash invocation requires a permission check and adds latency.
-- Always validate that source repos exist before cloning
-- Never delete branches without explicit user confirmation (nuke only)
-- `down` preserves remote branches — local branches are gone with the clone, which is expected
-- The filesystem is the single source of truth. No metadata files, no state tracking.
-- When running multiple git/tmux commands, run them sequentially (they depend on each other)
-- For `pkill`, always SIGTERM first, wait, then SIGKILL. Processes may not die immediately.
-- Use `git -C <path>` instead of `cd <path> && git ...` to avoid compound-command security prompts.
-- The `~/.local/bin/ws-init` script is part of this skill and handles workspace bootstrapping (dir creation, settings, tmux, Claude launch).
-- Workspace directories get permissive `.claude/settings.json` written by the creator (see step 3 of "up"). This gives the workspace Claude broad read/write/execute access within the workspace without per-command approval prompts.
+**Common issues:**
+- **Stale processes**: always run the `pgrep -f "bend-instance=<WORKSPACE_NAME>"` check before starting serve. If stale, run "Stopping serve".
+- **EADDRINUSE**: previous serve still running. Stop it, then restart.
+- **Serve exits immediately**: missing `bend yarn`, wrong package paths, or node OOM (the `--max_old_space_size=16384` flag should prevent OOM).
+- **Pages don't load**: verify worktree subdomain uses `<WORKSPACE_NAME>.local.<lbPrefix>.<domain>` (not `local.<domain>`), check `BEND_WORKTREE` was set, confirm `bend-instance=<WORKSPACE_NAME>` in process args.
+
+## Validating code with mcp-bend tools
+
+The mcp-bend tools talk directly to running Bend serve instances (discovered via `~/.hubspot/route-configs`). Use them instead of shell commands for compilation checks, type checking, and test runs.
+
+### Checking compilation errors
+
+Use `mcp__mcp-bend__compile` to get compilation errors across all running packages:
+
+```
+mcp__mcp-bend__compile()                    # all packages
+mcp__mcp-bend__compile(packageName="my-pkg") # filter to one package
+```
+
+Returns formatted errors with file paths, line/column positions, and descriptions. Run this after code changes to catch build errors early.
+
+### Type checking
+
+Use `mcp__mcp-bend__package-ts-get-errors` to get TypeScript diagnostics:
+
+```
+mcp__mcp-bend__package-ts-get-errors(packageName="my-pkg")
+```
+
+Returns TypeScript errors with absolute paths and 1-indexed line/column positions. Times out after 120s if the TS watch isn't responding.
+
+### Running tests
+
+Use `mcp__mcp-bend__package-get-tests-results` to run Jasmine tests through the Bend host — no browser automation needed:
+
+```
+# Run all tests for a package
+mcp__mcp-bend__package-get-tests-results(packageName="my-pkg")
+
+# Run tests matching a spec filter
+mcp__mcp-bend__package-get-tests-results(packageName="my-pkg", focusTests={"specNameQuery": "MyComponent"})
+```
+
+Returns formatted test results focusing on failed specs. Filtering is automatically cleared after each run.
+
+### Discovering packages
+
+Use `mcp__mcp-bend__list-packages` to see which packages the running Bend instance knows about. Useful to confirm serve is up and to get the correct package names for other tools.
+
+### When to validate
+
+- **After making code changes**: run compile + tests for affected packages
+- **Before reporting work as done**: run the full test suite and type check for affected packages
+- **On user request**: run whatever scope they ask for
+
+### Patience with test runs
+
+mcp-bend tools are synchronous. Full test suites take 2-5 minutes; TS checks up to 120s. Wait for them to return — silence is not a hang. Never restart serve because tests seem slow (recompilation is far more expensive). If a tool times out, investigate (serve still compiling? wrong package name?) rather than retrying blindly.
+
+### Troubleshooting
+
+If tools return no packages or error, serve may still be compiling. Use `mcp__mcp-bend__list-packages` to verify registration.
+
+## What to report when done
+
+After setup completes, tell the user:
+- Workspace name
+- Branch for each repo
+- **CLAUDE.md status**: which repos have a `CLAUDE.md` (AI context available) and which don't
+- **Resolved app URLs** from URL discovery (constructed from cached `lb` + `basename`). If quartz config wasn't available yet, note that the URL will be ready after serve compiles.
+- Test URL for each package: `https://<WORKSPACE_NAME>.local.hsappstatic.net/<PACKAGE_NAME>/static/test/test.html`
+- That serve is compiling (and they can start working while it builds)
+
+## Saving context on exit
+
+When the user says they're done, exiting, or wrapping up — or when you've completed a significant milestone — update `~/src/workspaces/<WORKSPACE_NAME>/CONTEXT.md` with:
+
+```markdown
+# <WORKSPACE_NAME> Context
+
+## Goal
+<What the user is trying to accomplish>
+
+## Status
+<What's been done so far>
+
+## Next steps
+<What's left to do>
+
+## Branches
+<List of repos and their current branch + latest commit subject>
+
+## Notes
+<Any blockers, decisions made, or things to watch out for>
+```
+
+This file is read by future sessions to restore context. Keep it concise — focus on non-obvious state that can't be derived from the code or git log.
