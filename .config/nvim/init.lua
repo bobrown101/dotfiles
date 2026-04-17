@@ -8,7 +8,7 @@ vim.pack.add({
     "https://github.com/nvim-lua/plenary.nvim",
     "https://github.com/nvim-tree/nvim-web-devicons",
 
-    -- Treesitter (dep for lspsaga, ts-comments)
+    -- Treesitter (dep for ts-comments)
     { src = "https://github.com/nvim-treesitter/nvim-treesitter", version = "main" },
 
     -- UI
@@ -27,14 +27,6 @@ vim.pack.add({
     -- LSP
     "https://github.com/neovim/nvim-lspconfig",
     { src = "https://github.com/j-hui/fidget.nvim", version = "legacy" },
-    "https://github.com/nvimdev/lspsaga.nvim",
-
-    -- Completion
-    "https://github.com/hrsh7th/nvim-cmp",
-    "https://github.com/hrsh7th/cmp-nvim-lsp",
-    "https://github.com/hrsh7th/cmp-nvim-lua",
-    "https://github.com/hrsh7th/cmp-buffer",
-    "https://github.com/onsails/lspkind-nvim",
 
     -- Formatting
     "https://github.com/stevearc/conform.nvim",
@@ -150,58 +142,21 @@ vim.api.nvim_create_autocmd("FileType", {
     callback = function() pcall(vim.treesitter.start) end,
 })
 
-local cmp = require("cmp")
-local lspkind = require("lspkind")
-cmp.setup({
-    snippet = { expand = function() end },
-    mapping = {
-        ["<Tab>"] = function(fallback)
-            if cmp.visible() then
-                cmp.select_next_item()
-            else
-                fallback()
-            end
-        end,
-        ["<S-Tab>"] = function(fallback)
-            if cmp.visible() then
-                cmp.select_prev_item()
-            else
-                fallback()
-            end
-        end,
-        ["<C-Space>"] = cmp.mapping(cmp.mapping.complete(), { "i", "s" }),
-        ["<CR>"] = cmp.mapping(cmp.mapping.confirm({ select = true }), { "i", "s" }),
-    },
-    sources = {
-        { name = "path" },
-        { name = "nvim_lsp" },
-        { name = "buffer" },
-        { name = "nvim_lua" },
-        { name = "treesitter" },
-    },
-    formatting = {
-        format = function(entry, vim_item)
-            vim_item.kind = lspkind.presets.default[vim_item.kind] .. " " .. vim_item.kind
-            vim_item.menu = ({
-                buffer = "[Buffer]",
-                nvim_lsp = "[LSP]",
-                nvim_lua = "[Lua]",
-                latex_symbols = "[Latex]",
-                nvim_cmp_hs_translation_source = "[Translation]",
-            })[entry.source.name]
-            return vim_item
-        end,
-    },
+vim.o.completeopt = "menu,menuone,noselect,fuzzy,popup"
+vim.api.nvim_create_autocmd("LspAttach", {
+    callback = function(ev)
+        local client = vim.lsp.get_client_by_id(ev.data.client_id)
+        if client and client:supports_method("textDocument/completion") then
+            vim.lsp.completion.enable(true, client.id, ev.buf, { autotrigger = true })
+        end
+    end,
 })
-
-require("lspsaga").setup({
-    code_action = {
-        extend_gitsigns = true,
-        num_shortcut = true,
-        keys = { quit = "<esc>", exec = "<CR>" },
-    },
-    symbol_in_winbar = { enable = false },
-})
+vim.keymap.set("i", "<Tab>", function()
+    return vim.fn.pumvisible() == 1 and "<C-n>" or "<Tab>"
+end, { expr = true })
+vim.keymap.set("i", "<S-Tab>", function()
+    return vim.fn.pumvisible() == 1 and "<C-p>" or "<S-Tab>"
+end, { expr = true })
 
 require("lualine").setup({
     options = {
