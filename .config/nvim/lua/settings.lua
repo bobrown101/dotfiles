@@ -1,7 +1,5 @@
-vim.g.mapleader = " "
-vim.g.noesckeys = true
-vim.g.updatetime = 200
-vim.g.noswapfile = true
+vim.o.updatetime = 200
+vim.o.swapfile = false
 vim.o.termguicolors = true
 vim.opt.list = true
 vim.opt.listchars = { space = "·" }
@@ -33,8 +31,8 @@ vim.o.cursorline = true
 -- - The "Cursor/lCursor" part tells Neovim to use the Cursor highlight group
 --   which we define in init.lua with custom colors (dark red background)
 vim.o.guicursor = "n-v-c:block,i-ci-ve:ver25,r-cr:hor20,o:hor50,a:blinkwait700-blinkoff400-blinkon250-Cursor/lCursor,sm:block-blinkwait175-blinkoff150-blinkon175"
-vim.g.nobackup = true
-vim.g.nowritebackup = true
+vim.o.backup = false
+vim.o.writebackup = false
 vim.o.timeoutlen = 500
 vim.o.ttimeoutlen = 50
 vim.o.clipboard = "unnamedplus"

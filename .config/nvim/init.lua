@@ -64,7 +64,6 @@ require("lazy").setup({
             -- options
         },
     },
-    "wbthomason/packer.nvim",
     "bobrown101/plugin-utils.nvim",
     {
         "folke/which-key.nvim",
@@ -369,18 +368,7 @@ require("lazy").setup({
     {
         "neovim/nvim-lspconfig",
     },
--- {
---     url = "git@git.hubteam.com:HubSpot/bend.nvim.git"
--- },
---     {
---         "pmizio/typescript-tools.nvim",
---         dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig", "git@git.hubteam.com:HubSpot/bend.nvim.git" },
---         event = { "BufReadPost *.ts", "BufReadPost *.js", "BufReadPost *.tsx", "BufReadPost *.jsx" },
---         config = function()
---             require("lsp")
---         end,
---     },
-   {
+    {
       "pmizio/typescript-tools.nvim",
       dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig", {
           url = "git@git.hubteam.com:HubSpot/bend.nvim.git"
