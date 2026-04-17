@@ -114,10 +114,7 @@ require("which-key").add({
 
 require("hubspot-js-utils").setup({})
 
-require("gitsigns").setup({
-    current_line_blame = true,
-    current_line_blame_opts = { delay = 500 },
-})
+require("gitsigns").setup()
 
 require("nvim-treesitter").install({
     "bash", "c", "css", "fish", "html", "java", "javascript", "json",
