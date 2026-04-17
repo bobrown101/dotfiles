@@ -38,32 +38,26 @@ vim.o.ttimeoutlen = 50
 vim.o.clipboard = "unnamedplus"
 vim.o.laststatus = 3 -- have a single global statusline, rather than one for every window
 vim.o.winbar = "%=%m %f"
+vim.o.winborder = "single"
 
--- " Use leader and hjkl to navigate windows
-vim.api.nvim_set_keymap("n", "<leader>h", "<cmd> wincmd h <CR>", { noremap = true, silent = true })
-vim.api.nvim_set_keymap("n", "<leader>j", "<cmd> wincmd j <CR>", { noremap = true, silent = true })
-vim.api.nvim_set_keymap("n", "<leader>k", "<cmd> wincmd k <CR>", { noremap = true, silent = true })
-vim.api.nvim_set_keymap("n", "<leader>l", "<cmd> wincmd l <CR>", { noremap = true, silent = true })
+-- Use leader and hjkl to navigate windows
+vim.keymap.set("n", "<leader>h", "<cmd>wincmd h<cr>", { silent = true })
+vim.keymap.set("n", "<leader>j", "<cmd>wincmd j<cr>", { silent = true })
+vim.keymap.set("n", "<leader>k", "<cmd>wincmd k<cr>", { silent = true })
+vim.keymap.set("n", "<leader>l", "<cmd>wincmd l<cr>", { silent = true })
 
--- " disable arrow keys
-vim.api.nvim_set_keymap("n", "<Up>", "<nop>", { noremap = true, silent = true })
-vim.api.nvim_set_keymap("n", "<Down>", "<nop>", { noremap = true, silent = true })
-vim.api.nvim_set_keymap("n", "<Left>", "<nop>", { noremap = true, silent = true })
-vim.api.nvim_set_keymap("n", "<Right>", "<nop>", { noremap = true, silent = true })
+-- disable arrow keys
+vim.keymap.set("n", "<Up>", "<nop>", { silent = true })
+vim.keymap.set("n", "<Down>", "<nop>", { silent = true })
+vim.keymap.set("n", "<Left>", "<nop>", { silent = true })
+vim.keymap.set("n", "<Right>", "<nop>", { silent = true })
 
-vim.api.nvim_set_keymap(
-	"n",
-	"<leader>_",
-	"<cmd> lua vim.api.nvim_win_set_width(vim.api.nvim_get_current_win(), vim.api.nvim_win_get_width(vim.api.nvim_get_current_win()) - 5)<CR>",
-	{ noremap = true, silent = true }
-)
-
-vim.api.nvim_set_keymap(
-	"n",
-	"<leader>+",
-	"<cmd> lua vim.api.nvim_win_set_width(vim.api.nvim_get_current_win(), vim.api.nvim_win_get_width(vim.api.nvim_get_current_win()) + 5)<CR>",
-	{ noremap = true, silent = true }
-)
+local function resize_width(delta)
+	local win = vim.api.nvim_get_current_win()
+	vim.api.nvim_win_set_width(win, vim.api.nvim_win_get_width(win) + delta)
+end
+vim.keymap.set("n", "<leader>_", function() resize_width(-5) end, { silent = true })
+vim.keymap.set("n", "<leader>+", function() resize_width(5) end, { silent = true })
 
 -- disable unused builtin plugins
 vim.g.loaded_gzip = 1

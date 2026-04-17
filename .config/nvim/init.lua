@@ -1,7 +1,7 @@
 vim.g.mapleader = " "
 
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
-if not vim.loop.fs_stat(lazypath) then
+if not vim.uv.fs_stat(lazypath) then
     vim.fn.system({
         "git",
         "clone",
@@ -380,26 +380,11 @@ require("lazy").setup({
           bend.setup({ v2 = true })
 
           require("typescript-tools").setup({
-              handlers = {
-                  ["textDocument/signatureHelp"] = vim.lsp.with(vim.lsp.handlers.signature_help, { border = "single" }),
-                  ["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, { border = "single" }),
-              },
               settings = {
                   tsserver_path = bend.getTsServerPathForCurrentFile(),
               },
           })
-          vim.api.nvim_set_keymap("n", "<space>gd", "<cmd>lua vim.lsp.buf.definition()<CR>", { noremap = true, silent = true })
-          vim.api.nvim_set_keymap(
-              "n",
-              "<space>gi",
-              "<cmd>lua vim.lsp.buf.implementation()<CR>",
-              { noremap = true, silent = true }
-          )
-          -- vim.api.nvim_set_keymap("n", "<space>d", require("nvim-pretty-ts-errors").show_line_diagnostics)
-          vim.api.nvim_set_keymap("n", "<space>gr", "<cmd>lua vim.lsp.buf.references()<CR>", { noremap = true, silent = true })
-          vim.api.nvim_set_keymap("n", "<space>rn", "<cmd>lua vim.lsp.buf.rename()<CR>", { noremap = true, silent = true })
-          vim.api.nvim_set_keymap("n", "K", "<cmd>lua vim.lsp.buf.hover()<CR>", { noremap = true, silent = true })
-          vim.api.nvim_set_keymap("n", "<space>ga", "<cmd>Lspsaga code_action<CR>", { noremap = true, silent = true })
+          vim.keymap.set("n", "<space>gd", vim.lsp.buf.definition, { silent = true })
       end,
     },
     {
