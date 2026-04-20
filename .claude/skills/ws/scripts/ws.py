@@ -37,14 +37,18 @@ import concurrent.futures
 import dataclasses
 import datetime
 import json
+import fcntl
 import os
 import pathlib
+import pty
 import re
 import shlex
 import shutil
 import signal
 import socket
+import struct
 import subprocess
+import termios
 import sys
 import threading
 import time
@@ -71,6 +75,10 @@ WS_DAEMON_STOP_TIMEOUT_S = 30.0
 SERVE_RING_BYTES = 256 * 1024
 BEND_REGISTRATION_TIMEOUT_S = 120.0
 SERVE_STOP_GRACE_S = 15.0
+CLAUDE_RING_BYTES = 128 * 1024
+CLAUDE_STOP_GRACE_S = 5.0
+CLAUDE_DEFAULT_COLS = 120
+CLAUDE_DEFAULT_ROWS = 40
 
 LB_DOMAIN_MAP = {
     "app": "app.hubspotqa.com",
@@ -620,10 +628,7 @@ class RingBuffer:
 
 @dataclasses.dataclass
 class Workspace:
-    """In-memory workspace state owned by the daemon.
-
-    Phase 2 populates only the serve side. Phase 3 adds claude_* fields.
-    """
+    """In-memory workspace state owned by the daemon."""
     name: str
     wsdir: pathlib.Path
     serve_proc: "asyncio.subprocess.Process | None" = None
@@ -636,6 +641,14 @@ class Workspace:
     serve_errors: list = dataclasses.field(default_factory=list)
     serve_bend_registered: bool = False
     serve_tail_subscribers: set = dataclasses.field(default_factory=set)
+    claude_proc: "asyncio.subprocess.Process | None" = None
+    claude_master_fd: "int | None" = None
+    claude_ring: RingBuffer = dataclasses.field(default_factory=lambda: RingBuffer(CLAUDE_RING_BYTES))
+    claude_read_task: "asyncio.Task | None" = None
+    claude_cols: int = CLAUDE_DEFAULT_COLS
+    claude_rows: int = CLAUDE_DEFAULT_ROWS
+    claude_prompt: str | None = None
+    claude_attach_subscribers: set = dataclasses.field(default_factory=set)
 
 
 def _daemon_log_line(msg, **fields):
@@ -745,8 +758,10 @@ class WsDaemon:
     async def _rpc_shutdown(self, req, writer):
         _daemon_log_line("shutdown requested")
         await self._respond(writer, {"ok": True})
-        # Stop every serve child before the event loop closes, so we don't
-        # leak bend processes when the daemon goes down.
+        # Stop every child (bend + claude) before the event loop closes, so we
+        # don't leak processes when the daemon goes down. Claude first so bend
+        # outlives the claude that depends on its MCP tools.
+        await self._stop_all_claudes()
         await self._stop_all_serves()
         loop = asyncio.get_running_loop()
         loop.call_later(0.05, self._shutdown_event.set)
@@ -1073,6 +1088,167 @@ class WsDaemon:
             *(self._stop_serve(ws) for ws in self.workspaces.values()),
             return_exceptions=True,
         )
+
+    # ---- claude lifecycle ----
+
+    async def _rpc_start_claude(self, req, writer):
+        name = normalize(req.get("name", ""))
+        if not name:
+            return {"ok": False, "error": "missing name"}
+        ws = self.workspaces.get(name)
+        if ws is None:
+            ws = Workspace(name=name, wsdir=ws_dir(name))
+            self.workspaces[name] = ws
+        if ws.claude_proc is not None and ws.claude_proc.returncode is None:
+            return {
+                "ok": False,
+                "error": f"claude already running for {name}",
+                "claudePid": ws.claude_proc.pid,
+            }
+        cols = int(req.get("cols") or CLAUDE_DEFAULT_COLS)
+        rows = int(req.get("rows") or CLAUDE_DEFAULT_ROWS)
+        ws.claude_cols = cols
+        ws.claude_rows = rows
+        ws.claude_prompt = req.get("prompt")
+        ws.claude_ring = RingBuffer(CLAUDE_RING_BYTES)
+        await self._spawn_claude(ws)
+        return {
+            "ok": True,
+            "workspace": name,
+            "claudePid": ws.claude_proc.pid if ws.claude_proc else None,
+        }
+
+    async def _rpc_stop_claude(self, req, writer):
+        name = normalize(req.get("name", ""))
+        ws = self.workspaces.get(name)
+        if ws is None:
+            return {"ok": True, "wasRunning": False, "workspace": name}
+        result = await self._stop_claude(ws)
+        return {"ok": True, "workspace": name, **result}
+
+    async def _spawn_claude(self, ws):
+        """Fork hsclaude under a PTY owned by the daemon.
+
+        The daemon keeps the master fd; the slave becomes hsclaude's
+        stdio and is closed in the daemon after exec so the child owns
+        it exclusively. start_new_session puts hsclaude in its own
+        process group, so we can SIGTERM the tree via killpg later.
+        """
+        ws.wsdir.mkdir(parents=True, exist_ok=True)
+        master_fd, slave_fd = pty.openpty()
+        _set_pty_size(master_fd, ws.claude_cols, ws.claude_rows)
+        claude_bin = shutil.which("hsclaude") or shutil.which("claude") or "claude"
+        cmd = [claude_bin, "--name", ws.name]
+        if ws.claude_prompt:
+            cmd.append(ws.claude_prompt)
+        _daemon_log_line(
+            "claude spawn", name=ws.name,
+            cmd=" ".join(shlex.quote(c) for c in cmd[:2] + (["<prompt>"] if ws.claude_prompt else [])),
+        )
+        try:
+            ws.claude_proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                cwd=str(ws.wsdir),
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                start_new_session=True,
+            )
+        finally:
+            os.close(slave_fd)
+        ws.claude_master_fd = master_fd
+        _daemon_log_line("claude pid", name=ws.name, pid=ws.claude_proc.pid)
+        ws.claude_read_task = asyncio.create_task(self._read_claude_pty(ws))
+
+    async def _read_claude_pty(self, ws):
+        """Drain master_fd into the claude ring buffer + fan out to attachers."""
+        loop = asyncio.get_running_loop()
+        fd = ws.claude_master_fd
+        try:
+            while True:
+                try:
+                    chunk = await loop.run_in_executor(None, _read_fd, fd, 8192)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                ws.claude_ring.append(chunk)
+                for q in list(ws.claude_attach_subscribers):
+                    try:
+                        q.put_nowait(chunk)
+                    except asyncio.QueueFull:
+                        pass  # slow attacher; drop
+        except Exception as exc:  # noqa: BLE001 — reader death is surfaced via state
+            _daemon_log_line("claude pty reader error", name=ws.name, error=str(exc))
+        finally:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            ws.claude_master_fd = None
+            if ws.claude_proc is not None:
+                try:
+                    rc = await ws.claude_proc.wait()
+                    _daemon_log_line("claude exited", name=ws.name, returncode=rc)
+                except Exception:  # noqa: BLE001
+                    pass
+            for q in list(ws.claude_attach_subscribers):
+                try:
+                    q.put_nowait(None)  # sentinel → attacher closes
+                except asyncio.QueueFull:
+                    pass
+
+    async def _stop_claude(self, ws, grace=CLAUDE_STOP_GRACE_S):
+        """SIGTERM claude's process group → wait → SIGKILL."""
+        proc = ws.claude_proc
+        if proc is None or proc.returncode is not None:
+            return {"wasRunning": False}
+        pid = proc.pid
+        _daemon_log_line("claude stop: SIGTERM", name=ws.name, pid=pid)
+        try:
+            os.killpg(os.getpgid(pid), signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            pass
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=grace)
+        except asyncio.TimeoutError:
+            _daemon_log_line("claude stop: SIGKILL", name=ws.name, pid=pid)
+            try:
+                os.killpg(os.getpgid(pid), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=3.0)
+            except asyncio.TimeoutError:
+                _daemon_log_line("claude stop: SIGKILL timeout", name=ws.name, pid=pid)
+        return {"wasRunning": True, "returncode": proc.returncode}
+
+    async def _stop_all_claudes(self):
+        alive = [ws for ws in self.workspaces.values()
+                 if ws.claude_proc is not None and ws.claude_proc.returncode is None]
+        if not alive:
+            return
+        _daemon_log_line("shutting down all claudes", count=len(alive))
+        await asyncio.gather(
+            *(self._stop_claude(ws) for ws in alive),
+            return_exceptions=True,
+        )
+
+
+def _read_fd(fd, n):
+    """Blocking os.read that swallows OSError (fd closed mid-read)."""
+    try:
+        return os.read(fd, n)
+    except OSError:
+        return b""
+
+
+def _set_pty_size(fd, cols, rows):
+    """Apply TIOCSWINSZ to a pty master fd so the child sees the size."""
+    try:
+        fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+    except OSError:
+        pass
 
 
 def _snapshot_introspection_files():
