@@ -2221,6 +2221,164 @@ def cmd_nuke(args):
     })
 
 
+# ---------------------------------------------------------------- Command: attach-claude
+
+_ATTACH_DETACH_BYTE = 0x1c  # Ctrl-\ — local detach, same as dtach default.
+
+
+def _term_size():
+    try:
+        sz = shutil.get_terminal_size()
+        return sz.columns, sz.lines
+    except OSError:
+        return CLAUDE_DEFAULT_COLS, CLAUDE_DEFAULT_ROWS
+
+
+def cmd_attach_claude(args):
+    """Interactive CLI attach to the daemon-owned claude PTY.
+
+    Connects to the daemon, sends attach_claude, acks newline-JSON, then
+    flips the terminal to raw mode and bidirectionally proxies bytes.
+    Ctrl-\\ detaches locally (claude keeps running in the daemon).
+    SIGWINCH triggers a separate resize_claude RPC on a fresh socket.
+    """
+    import select
+    import tty
+
+    name = normalize(args.name)
+    cols, rows = _term_size()
+
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        sock.connect(str(WS_DAEMON_SOCKET))
+    except (FileNotFoundError, ConnectionRefusedError, OSError) as exc:
+        log(f"ws-daemon is not running: {exc}")
+        sys.exit(2)
+
+    req = {
+        "method": "attach_claude",
+        "name": name,
+        "cols": cols,
+        "rows": rows,
+        "readonly": bool(args.readonly),
+    }
+    sock.sendall((json.dumps(req) + "\n").encode("utf-8"))
+
+    # Read the newline-terminated ack before going raw.
+    buf = b""
+    while b"\n" not in buf:
+        chunk = sock.recv(65536)
+        if not chunk:
+            log("daemon closed connection before ack")
+            sock.close()
+            sys.exit(2)
+        buf += chunk
+    line, _, rest = buf.partition(b"\n")
+    try:
+        ack = json.loads(line.decode("utf-8"))
+    except json.JSONDecodeError as exc:
+        log(f"invalid ack from daemon: {exc}")
+        sock.close()
+        sys.exit(2)
+    if not ack.get("ok"):
+        log(f"attach refused: {ack.get('error')}")
+        sock.close()
+        sys.exit(1)
+
+    stdin_fd = sys.stdin.fileno()
+    stdout_fd = sys.stdout.fileno()
+    is_tty = os.isatty(stdin_fd)
+    old_attrs = termios.tcgetattr(stdin_fd) if is_tty else None
+
+    def winch_handler(signum, frame):
+        c, r = _term_size()
+        try:
+            sock2 = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock2.settimeout(1.0)
+            sock2.connect(str(WS_DAEMON_SOCKET))
+            sock2.sendall((json.dumps({
+                "method": "resize_claude", "name": name,
+                "cols": c, "rows": r,
+            }) + "\n").encode("utf-8"))
+            sock2.recv(4096)  # ack, discard
+            sock2.close()
+        except OSError:
+            pass
+
+    # Write any post-ack replay bytes the daemon already sent.
+    if rest:
+        try:
+            os.write(stdout_fd, rest)
+        except OSError:
+            pass
+
+    try:
+        if is_tty:
+            tty.setraw(stdin_fd)
+        try:
+            signal.signal(signal.SIGWINCH, winch_handler)
+        except (OSError, ValueError):
+            pass
+        sock.setblocking(False)
+        detach = False
+        while not detach:
+            try:
+                rlist, _, _ = select.select([sock, stdin_fd], [], [], None)
+            except (InterruptedError, OSError):
+                continue
+            if sock in rlist:
+                try:
+                    data = sock.recv(65536)
+                except BlockingIOError:
+                    data = b""
+                except OSError:
+                    break
+                if not data:
+                    break
+                try:
+                    os.write(stdout_fd, data)
+                except OSError:
+                    break
+            if stdin_fd in rlist:
+                try:
+                    data = os.read(stdin_fd, 4096)
+                except OSError:
+                    break
+                if not data:
+                    break
+                if _ATTACH_DETACH_BYTE in data:
+                    idx = data.index(_ATTACH_DETACH_BYTE)
+                    if idx > 0 and not args.readonly:
+                        try:
+                            sock.sendall(data[:idx])
+                        except OSError:
+                            pass
+                    detach = True
+                    break
+                if args.readonly:
+                    continue
+                try:
+                    sock.sendall(data)
+                except OSError:
+                    break
+    finally:
+        try:
+            signal.signal(signal.SIGWINCH, signal.SIG_DFL)
+        except (OSError, ValueError):
+            pass
+        try:
+            sock.close()
+        except OSError:
+            pass
+        if is_tty and old_attrs is not None:
+            try:
+                termios.tcsetattr(stdin_fd, termios.TCSADRAIN, old_attrs)
+            except OSError:
+                pass
+        sys.stdout.write("\r\n[detached from {}]\r\n".format(name))
+        sys.stdout.flush()
+
+
 # ---------------------------------------------------------------- main
 
 def main():
@@ -2277,6 +2435,10 @@ def main():
     p.add_argument("repo_path")
     p.add_argument("--workspace", default=None)
 
+    p = sub.add_parser("attach-claude", help="Attach to the workspace claude PTY (Ctrl-\\ to detach)")
+    p.add_argument("name")
+    p.add_argument("--readonly", action="store_true", help="Do not send stdin to claude")
+
     p = sub.add_parser("daemon", help="ws-daemon lifecycle (single long-lived process)")
     dsub = p.add_subparsers(dest="daemon_command", required=True)
     dsub.add_parser("run", help="Foreground event loop (used by `start` after fork)")
@@ -2313,6 +2475,7 @@ def main():
         "restart": cmd_restart,
         "nuke": cmd_nuke,
         "discover": cmd_discover,
+        "attach-claude": cmd_attach_claude,
     }
     handlers[args.command](args)
 
