@@ -19,13 +19,13 @@ No emoji, no `Co-Authored-By` footer on this branch.
 
 ## Phase 1 — daemon skeleton
 
-- [ ] Add `ws.py daemon run` subcommand (asyncio event loop, binds `~/.ws-daemon.sock`, accepts connections, responds to `ping` / `shutdown`)
-- [ ] Add `ws.py daemon start` (fork + setsid + exit when socket accepts)
-- [ ] Add `ws.py daemon stop` (RPC `shutdown`, wait for socket cleanup)
-- [ ] Add `ws.py daemon status` (socket connect + `ping`)
-- [ ] Add `ws.py daemon logs` (tail `~/.ws-daemon.log`)
-- [ ] Auto-start logic in all RPC-client commands (opt-out via `--no-autostart`)
-- [ ] Verify: `ws.py daemon start` → `ws.py daemon status` returns running; `ws.py daemon stop` returns; socket file gone
+- [x] Add `ws.py daemon run` subcommand (asyncio event loop, binds `~/.ws-daemon.sock`, accepts connections, responds to `ping` / `shutdown`)
+- [x] Add `ws.py daemon start` (fork + setsid + exit when socket accepts)
+- [x] Add `ws.py daemon stop` (RPC `shutdown`, wait for socket cleanup)
+- [x] Add `ws.py daemon status` (socket connect + `ping`)
+- [x] Add `ws.py daemon logs` (tail `~/.ws-daemon.log`)
+- [ ] Auto-start logic in all RPC-client commands (opt-out via `--no-autostart`) — helper `daemon_rpc(..., autostart=True)` written, but no RPC-client commands exist yet (Phase 2)
+- [x] Verify: `ws.py daemon start` → `ws.py daemon status` returns running; `ws.py daemon stop` returns; socket file gone
 
 ## Phase 2 — daemon owns serve
 

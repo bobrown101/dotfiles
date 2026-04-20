@@ -32,6 +32,7 @@ Usage:
 """
 
 import argparse
+import asyncio
 import concurrent.futures
 import datetime
 import json
@@ -41,6 +42,7 @@ import re
 import shlex
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -61,6 +63,12 @@ DEFAULT_ORG = "HubSpot"
 DEFAULT_BRANCH_PREFIX = "brbrown/"
 SHARED_SERVE_SESSION = "workspaces-serve-commands"
 LOG_TAIL_BYTES = 50_000
+
+# ws-daemon (single long-lived process; owns workspace state in memory).
+WS_DAEMON_SOCKET = HOME / ".ws-daemon.sock"
+WS_DAEMON_LOG = HOME / ".ws-daemon.log"
+WS_DAEMON_START_TIMEOUT_S = 10.0
+WS_DAEMON_STOP_TIMEOUT_S = 30.0
 
 LB_DOMAIN_MAP = {
     "app": "app.hubspotqa.com",
@@ -318,6 +326,9 @@ def list_package_dirs(repo_clone):
     - has `static/quartz.config.ts` (bend frontend package; common in
       library-style repos like customer-data-table where sub-packages don't
       carry their own package.json)
+    - has `static/static_conf.json` (canonical bend package marker — older
+      library packages like crm-object-search-query-utilities may not yet
+      have a quartz config but are still valid bend packages)
     """
     if not repo_clone.exists():
         return []
@@ -327,7 +338,11 @@ def list_package_dirs(repo_clone):
             continue
         if any(s in child.name for s in EXCLUDE_SUBDIR_SUBSTRS):
             continue
-        if (child / "package.json").exists() or (child / "static" / "quartz.config.ts").exists():
+        if (
+            (child / "package.json").exists()
+            or (child / "static" / "quartz.config.ts").exists()
+            or (child / "static" / "static_conf.json").exists()
+        ):
             pkg_dirs.append(child)
     return pkg_dirs
 
@@ -679,6 +694,306 @@ class ServeDaemon:
             self._daemon_log(f"bend exited code={rc}")
             self._stopping.set()
             sys.exit(rc)
+
+
+# ---------------------------------------------------------------- ws-daemon (singleton, in-memory registry)
+#
+# Long-lived process that will own every workspace's serve + Claude PTY once
+# Phases 2 and 3 land. This file currently has the skeleton only: event loop,
+# Unix-socket RPC server, newline-JSON framing, and ping/shutdown methods.
+# All workspace state lives here in memory — intentionally; machine reboot
+# means every workspace is gone and `ws.py init` re-creates it.
+
+class DaemonNotRunning(Exception):
+    """Raised by client helpers when the daemon socket isn't answering."""
+
+
+def _daemon_log_line(msg, **fields):
+    """Append one JSON-line to the daemon log. Best-effort; swallows errors."""
+    try:
+        WS_DAEMON_LOG.parent.mkdir(parents=True, exist_ok=True)
+        entry = {
+            "t": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            "pid": os.getpid(),
+            "msg": msg,
+            **fields,
+        }
+        with open(WS_DAEMON_LOG, "a") as f:
+            f.write(json.dumps(entry, default=str) + "\n")
+    except OSError:
+        pass
+
+
+class WsDaemon:
+    """asyncio-backed Unix-socket RPC server. State is in-memory only."""
+
+    def __init__(self, socket_path):
+        self.socket_path = pathlib.Path(socket_path)
+        self.workspaces = {}  # populated in Phase 2
+        self._server = None
+        self._shutdown_event = None
+
+    async def run(self):
+        self._shutdown_event = asyncio.Event()
+        # If a stale socket exists and isn't answering, remove it.
+        if self.socket_path.exists():
+            try:
+                _rpc_send({"method": "ping"}, socket_path=self.socket_path, timeout=0.5)
+                raise RuntimeError(f"another daemon already running on {self.socket_path}")
+            except DaemonNotRunning:
+                try:
+                    self.socket_path.unlink()
+                except FileNotFoundError:
+                    pass
+        self.socket_path.parent.mkdir(parents=True, exist_ok=True)
+        self._server = await asyncio.start_unix_server(
+            self._handle_client, path=str(self.socket_path)
+        )
+        try:
+            os.chmod(self.socket_path, 0o600)
+        except OSError:
+            pass
+        _daemon_log_line("daemon started", socket=str(self.socket_path))
+        try:
+            await self._shutdown_event.wait()
+        finally:
+            self._server.close()
+            await self._server.wait_closed()
+            try:
+                self.socket_path.unlink()
+            except FileNotFoundError:
+                pass
+            _daemon_log_line("daemon stopped")
+
+    async def _handle_client(self, reader, writer):
+        try:
+            line = await reader.readline()
+            if not line:
+                return
+            try:
+                req = json.loads(line.decode("utf-8"))
+            except json.JSONDecodeError as exc:
+                await self._respond(writer, {"ok": False, "error": f"invalid json: {exc}"})
+                return
+            method = req.get("method") if isinstance(req, dict) else None
+            handler = getattr(self, f"_rpc_{method}", None) if method else None
+            if handler is None:
+                await self._respond(writer, {"ok": False, "error": f"unknown method: {method!r}"})
+                return
+            try:
+                result = await handler(req, writer)
+            except Exception as exc:  # noqa: BLE001 — surfaced to client
+                _daemon_log_line("rpc error", method=method, error=str(exc))
+                await self._respond(writer, {"ok": False, "error": str(exc)})
+                return
+            if result is not None:
+                await self._respond(writer, result)
+        finally:
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except Exception:  # noqa: BLE001 — client already gone is fine
+                pass
+
+    async def _respond(self, writer, obj):
+        payload = (json.dumps(obj, default=str) + "\n").encode("utf-8")
+        writer.write(payload)
+        try:
+            await writer.drain()
+        except (ConnectionResetError, BrokenPipeError):
+            pass
+
+    # ---- RPC handlers ----
+
+    async def _rpc_ping(self, req, writer):
+        return {
+            "ok": True,
+            "pid": os.getpid(),
+            "workspaceCount": len(self.workspaces),
+        }
+
+    async def _rpc_shutdown(self, req, writer):
+        _daemon_log_line("shutdown requested")
+        await self._respond(writer, {"ok": True})
+        # Schedule loop stop on the next tick so the ack drains first.
+        loop = asyncio.get_running_loop()
+        loop.call_later(0.05, self._shutdown_event.set)
+        return None
+
+
+def _rpc_send(req, socket_path=WS_DAEMON_SOCKET, timeout=5.0):
+    """Blocking single-request RPC. Returns parsed JSON response."""
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.settimeout(timeout)
+    try:
+        sock.connect(str(socket_path))
+    except (FileNotFoundError, ConnectionRefusedError, OSError) as exc:
+        sock.close()
+        raise DaemonNotRunning(str(exc)) from exc
+    try:
+        sock.sendall((json.dumps(req) + "\n").encode("utf-8"))
+        buf = b""
+        while b"\n" not in buf:
+            chunk = sock.recv(65536)
+            if not chunk:
+                break
+            buf += chunk
+    finally:
+        sock.close()
+    line, _, _ = buf.partition(b"\n")
+    if not line:
+        raise DaemonNotRunning("empty response")
+    return json.loads(line.decode("utf-8"))
+
+
+def daemon_rpc(method, *, autostart=True, timeout=5.0, **params):
+    """Client helper. Auto-starts the daemon once on DaemonNotRunning."""
+    req = {"method": method, **params}
+    try:
+        return _rpc_send(req, timeout=timeout)
+    except DaemonNotRunning:
+        if not autostart:
+            raise
+        _ensure_daemon_running()
+        return _rpc_send(req, timeout=timeout)
+
+
+def _ensure_daemon_running():
+    """Launch the daemon if it isn't up. Used by auto-start path."""
+    try:
+        _rpc_send({"method": "ping"}, timeout=0.5)
+        return
+    except DaemonNotRunning:
+        pass
+    log("daemon not running — starting it")
+    _fork_daemon_detached()
+    deadline = time.monotonic() + WS_DAEMON_START_TIMEOUT_S
+    while time.monotonic() < deadline:
+        try:
+            _rpc_send({"method": "ping"}, timeout=0.5)
+            return
+        except DaemonNotRunning:
+            time.sleep(0.1)
+    raise RuntimeError("daemon failed to start within timeout")
+
+
+def _fork_daemon_detached():
+    """Double-fork + setsid to spawn `ws.py daemon run` as a detached process."""
+    pid = os.fork()
+    if pid > 0:
+        os.waitpid(pid, 0)  # reap the intermediate child
+        return
+    # First child
+    os.setsid()
+    pid2 = os.fork()
+    if pid2 > 0:
+        os._exit(0)
+    # Grandchild — actual daemon.
+    os.chdir(str(HOME))
+    devnull = os.open(os.devnull, os.O_RDWR)
+    os.dup2(devnull, 0)
+    os.dup2(devnull, 1)
+    WS_DAEMON_LOG.parent.mkdir(parents=True, exist_ok=True)
+    log_fd = os.open(str(WS_DAEMON_LOG), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    os.dup2(log_fd, 2)
+    os.close(devnull)
+    os.close(log_fd)
+    os.execv(sys.executable, [sys.executable, str(THIS_FILE), "daemon", "run"])
+
+
+# ---- daemon CLI commands ----
+
+def cmd_daemon_run(args):
+    """Foreground event loop. `daemon start` execs into this after forking."""
+    daemon = WsDaemon(WS_DAEMON_SOCKET)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    def _stop():
+        _daemon_log_line("signal received")
+        if daemon._shutdown_event is not None:
+            daemon._shutdown_event.set()
+
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        try:
+            loop.add_signal_handler(sig, _stop)
+        except NotImplementedError:
+            pass
+
+    try:
+        loop.run_until_complete(daemon.run())
+    finally:
+        loop.close()
+
+
+def cmd_daemon_start(args):
+    try:
+        resp = _rpc_send({"method": "ping"}, timeout=0.5)
+        emit({"ok": True, "running": True, "pid": resp.get("pid"), "alreadyRunning": True})
+        return
+    except DaemonNotRunning:
+        pass
+    # Remove any stale socket that a previous (unclean) exit left behind.
+    try:
+        WS_DAEMON_SOCKET.unlink()
+    except FileNotFoundError:
+        pass
+    _fork_daemon_detached()
+    deadline = time.monotonic() + WS_DAEMON_START_TIMEOUT_S
+    while time.monotonic() < deadline:
+        try:
+            resp = _rpc_send({"method": "ping"}, timeout=0.5)
+            emit({"ok": True, "running": True, "pid": resp.get("pid"), "started": True})
+            return
+        except DaemonNotRunning:
+            time.sleep(0.1)
+    emit_error("daemon failed to start within timeout")
+
+
+def cmd_daemon_stop(args):
+    try:
+        _rpc_send({"method": "shutdown"}, timeout=2.0)
+    except DaemonNotRunning:
+        emit({"ok": True, "wasRunning": False})
+        return
+    deadline = time.monotonic() + WS_DAEMON_STOP_TIMEOUT_S
+    while time.monotonic() < deadline:
+        if not WS_DAEMON_SOCKET.exists():
+            emit({"ok": True, "wasRunning": True})
+            return
+        time.sleep(0.1)
+    emit_error("daemon did not stop within timeout")
+
+
+def cmd_daemon_status(args):
+    try:
+        resp = _rpc_send({"method": "ping"}, timeout=0.5)
+        emit({
+            "ok": True,
+            "running": True,
+            "pid": resp.get("pid"),
+            "workspaceCount": resp.get("workspaceCount", 0),
+            "socket": str(WS_DAEMON_SOCKET),
+        })
+    except DaemonNotRunning:
+        emit({"ok": True, "running": False, "socket": str(WS_DAEMON_SOCKET)})
+
+
+def cmd_daemon_logs(args):
+    if not WS_DAEMON_LOG.exists():
+        emit({"ok": True, "lines": [], "path": str(WS_DAEMON_LOG)})
+        return
+    with open(WS_DAEMON_LOG, "rb") as f:
+        f.seek(0, 2)
+        size = f.tell()
+        read_size = min(size, LOG_TAIL_BYTES)
+        f.seek(size - read_size)
+        data = f.read()
+    lines = data.decode("utf-8", errors="replace").splitlines()
+    tail = getattr(args, "tail", None)
+    if tail:
+        lines = lines[-tail:]
+    emit({"ok": True, "lines": lines, "path": str(WS_DAEMON_LOG)})
 
 
 # ---------------------------------------------------------------- Command: plan
@@ -1475,7 +1790,28 @@ def main():
     p.add_argument("name")
     p.add_argument("pkgs", nargs="+")
 
+    p = sub.add_parser("daemon", help="ws-daemon lifecycle (single long-lived process)")
+    dsub = p.add_subparsers(dest="daemon_command", required=True)
+    dsub.add_parser("run", help="Foreground event loop (used by `start` after fork)")
+    dsub.add_parser("start", help="Spawn the daemon in the background")
+    dsub.add_parser("stop", help="Shut the daemon down over RPC")
+    dsub.add_parser("status", help="Is the daemon running?")
+    lg = dsub.add_parser("logs", help="Tail the daemon's log file")
+    lg.add_argument("--tail", type=int, default=200)
+
     args = parser.parse_args()
+
+    daemon_handlers = {
+        "run": cmd_daemon_run,
+        "start": cmd_daemon_start,
+        "stop": cmd_daemon_stop,
+        "status": cmd_daemon_status,
+        "logs": cmd_daemon_logs,
+    }
+
+    if args.command == "daemon":
+        daemon_handlers[args.daemon_command](args)
+        return
 
     handlers = {
         "plan": cmd_plan,
