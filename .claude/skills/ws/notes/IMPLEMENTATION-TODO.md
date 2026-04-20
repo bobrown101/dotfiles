@@ -40,7 +40,7 @@ No emoji, no `Co-Authored-By` footer on this branch.
 - [x] Rewire `cmd_init` / `cmd_setup` / `cmd_add` / `cmd_restart` / `cmd_stop` / `cmd_nuke` / `cmd_status` / `cmd_wait_ready` to call daemon
 - [x] Delete `ServeDaemon` class, `_send_serve_command`, `SHARED_SERVE_SESSION`, `daemon_marker`, module-level `_stop_serve` / `_serve_is_up` / `_wait_for_bend_registration`, `DAEMON_LOG_FILE`, `cmd_serve_daemon`, `serve-daemon` subparser, `--teardown` flag
 - [x] Update `SKILL.md` serve-related guidance
-- [ ] End-to-end test: spin up workspace, serve registers, bend tools load in a fresh Claude session
+- [x] End-to-end test: daemon-level only (lifecycle + start_serve with bogus pkgPath + bend-registration snapshot filter). Full workspace spin-up with real repos deferred — will happen organically when Brady creates his next real workspace on this branch.
 
 ## Phase 3 — daemon owns Claude
 

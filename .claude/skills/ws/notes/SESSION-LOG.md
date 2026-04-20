@@ -37,6 +37,12 @@ Entry format:
 
 **Next**: Phase 2 close-out — an **end-to-end test** before cutting Phase 3: `ws.py init <name> <repo>`, confirm bend registers in `~/.hubspot/route-configs/`, confirm workspace Claude sees bend_* tools, `ws.py nuke <name>` cleans up, `pgrep -f bend.reactor.serve` = 0. If it's clean, Phase 3 begins with `start_claude` RPC (pty.openpty + asyncio subprocess hsclaude).
 
+### Mid-session addendum (Phase 2 e2e test)
+
+Ran a daemon-level e2e: `daemon start` → `start_serve` (bogus pkgPath) → `stop_serve` → `daemon stop`. Surfaced a real MCP-ordering bug: `_wait_for_bend_registration` matched *any* `*-introspection` file with mtime >= start_time, so a concurrent workspace's bend heartbeat could false-positive the registration check. Fixed by snapshotting introspection filenames pre-spawn and only accepting NEW names. Also added an early-exit: if the bend child dies before a file appears, bail instead of waiting the full 120s timeout. Commit `56d4f18`.
+
+Did NOT run a full workspace-init e2e: Brady had live bends on `dual-infinite-scroll` and `sensible-crm-search-ids` at test time, and I didn't want to risk touching them. Full spin-up validates when Brady opens his next workspace on this branch — the daemon will be exercised for real.
+
 **Notes**:
 - Earlier session left `cmd_init` partially rewired (daemon_rpc block in place, emit still had `serveWindow`). Finished the emit update, then chained straight through setup/add/restart/stop/nuke.
 - `cmd_nuke` uses `autostart=False` on its `stop_serve` RPC and catches `DaemonNotRunning`: nuking when the daemon's already dead should not spin it back up just to tell it to SIGTERM a process it never owned.
