@@ -778,8 +778,11 @@ class WsDaemon:
         ws.serve_errors = []
         ws.serve_bend_registered = False
         ws.serve_started_at = time.time()
+        existing_introspection = _snapshot_introspection_files()
         await self._spawn_bend_serve(ws)
-        registered = await self._wait_for_bend_registration(ws.serve_started_at)
+        registered = await self._wait_for_bend_registration(
+            ws, existing_introspection,
+        )
         ws.serve_bend_registered = registered
         return {
             "ok": True,
@@ -1007,26 +1010,33 @@ class WsDaemon:
         ws.serve_packages = result["packages"]
         ws.serve_errors = result["errors"]
 
-    async def _wait_for_bend_registration(self, start_time, timeout=BEND_REGISTRATION_TIMEOUT_S):
-        """Block until bend writes a fresh *-introspection file to route-configs.
+    async def _wait_for_bend_registration(self, ws, existing, timeout=BEND_REGISTRATION_TIMEOUT_S):
+        """Block until bend writes a NEW *-introspection file to route-configs.
 
         The workspace Claude's devex-mcp-server only scans route-configs at
-        startup, so bend must be registered BEFORE we launch Claude.
+        startup, so bend must be registered BEFORE we launch Claude. We
+        ignore files that pre-existed the spawn (other workspaces' bends
+        or leftovers) and also bail early if this ws's bend has already
+        exited — no point waiting the full timeout for a dead process.
         """
         deadline = time.time() + timeout
         while time.time() < deadline:
-            if ROUTE_CONFIGS_DIR.exists():
-                for f in ROUTE_CONFIGS_DIR.iterdir():
-                    if not f.name.endswith("-introspection"):
-                        continue
-                    try:
-                        if f.stat().st_mtime >= start_time:
-                            _daemon_log_line("bend registered", introspection=f.name)
-                            return True
-                    except OSError:
-                        continue
+            if ws.serve_proc is None or ws.serve_proc.returncode is not None:
+                _daemon_log_line(
+                    "bend registration aborted: serve exited",
+                    name=ws.name,
+                    returncode=(ws.serve_proc.returncode if ws.serve_proc else None),
+                )
+                return False
+            new_files = _snapshot_introspection_files() - existing
+            if new_files:
+                _daemon_log_line(
+                    "bend registered", name=ws.name,
+                    introspection=sorted(new_files),
+                )
+                return True
             await asyncio.sleep(1)
-        _daemon_log_line("bend registration timeout", timeout=timeout)
+        _daemon_log_line("bend registration timeout", name=ws.name, timeout=timeout)
         return False
 
     async def _stop_serve(self, ws, grace=SERVE_STOP_GRACE_S):
@@ -1063,6 +1073,23 @@ class WsDaemon:
             *(self._stop_serve(ws) for ws in self.workspaces.values()),
             return_exceptions=True,
         )
+
+
+def _snapshot_introspection_files():
+    """Return the set of current *-introspection filenames in route-configs.
+
+    Used to distinguish 'a brand-new bend just registered' from 'some
+    other workspace's existing bend is still sitting in this dir'.
+    """
+    if not ROUTE_CONFIGS_DIR.exists():
+        return set()
+    try:
+        return {
+            f.name for f in ROUTE_CONFIGS_DIR.iterdir()
+            if f.name.endswith("-introspection")
+        }
+    except OSError:
+        return set()
 
 
 def _derive_urls_for(name):
