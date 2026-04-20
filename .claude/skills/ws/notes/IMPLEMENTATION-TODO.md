@@ -29,14 +29,14 @@ No emoji, no `Co-Authored-By` footer on this branch.
 
 ## Phase 2 — daemon owns serve
 
-- [ ] Daemon RPC: `start_serve` (Popen `bend reactor serve`, wire stdout → ring buffer)
-- [ ] Daemon RPC: `stop_serve` (SIGTERM → 15s → SIGKILL)
+- [x] Daemon RPC: `start_serve` (Popen `bend reactor serve`, wire stdout → ring buffer)
+- [ ] Daemon RPC: `stop_serve` (SIGTERM → 15s → SIGKILL) — helper `_stop_serve` exists; needs RPC wrapper
 - [ ] Daemon RPC: `restart_serve`
 - [ ] Daemon RPC: `status` (derive from ring buffer + process state)
 - [ ] Daemon RPC: `list`
 - [ ] Daemon RPC: `tail_serve` (both follow and non-follow)
 - [ ] Daemon RPC: `remove_pkg`
-- [ ] MCP ordering: `start_serve` blocks until `~/.hubspot/route-configs/<pid>-introspection` appears (port `_wait_for_bend_registration`)
+- [x] MCP ordering: `start_serve` blocks until `~/.hubspot/route-configs/<pid>-introspection` appears (port `_wait_for_bend_registration`)
 - [ ] Rewire `cmd_init` / `cmd_setup` / `cmd_add` / `cmd_restart` / `cmd_stop` to call daemon
 - [ ] Delete `ServeDaemon` class, `_send_serve_command`, `SHARED_SERVE_SESSION`, `daemon_marker`
 - [ ] Update `SKILL.md` serve-related guidance

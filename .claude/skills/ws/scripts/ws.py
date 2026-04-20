@@ -34,6 +34,7 @@ Usage:
 import argparse
 import asyncio
 import concurrent.futures
+import dataclasses
 import datetime
 import json
 import os
@@ -69,6 +70,9 @@ WS_DAEMON_SOCKET = HOME / ".ws-daemon.sock"
 WS_DAEMON_LOG = HOME / ".ws-daemon.log"
 WS_DAEMON_START_TIMEOUT_S = 10.0
 WS_DAEMON_STOP_TIMEOUT_S = 30.0
+SERVE_RING_BYTES = 256 * 1024
+BEND_REGISTRATION_TIMEOUT_S = 120.0
+SERVE_STOP_GRACE_S = 15.0
 
 LB_DOMAIN_MAP = {
     "app": "app.hubspotqa.com",
@@ -708,6 +712,55 @@ class DaemonNotRunning(Exception):
     """Raised by client helpers when the daemon socket isn't answering."""
 
 
+class RingBuffer:
+    """Bounded byte buffer. Append-only until it fills, then oldest bytes drop.
+
+    We don't need random access; callers only read the whole tail. Keeping this
+    as a single bytearray is simpler than a chunk list and fast enough for
+    ~256 KB sizes at bend's output rates.
+    """
+
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self._buf = bytearray()
+
+    def append(self, chunk):
+        if not chunk:
+            return
+        self._buf.extend(chunk)
+        overflow = len(self._buf) - self.capacity
+        if overflow > 0:
+            del self._buf[:overflow]
+
+    def snapshot(self):
+        return bytes(self._buf)
+
+    def text(self):
+        return self._buf.decode("utf-8", errors="replace")
+
+    def __len__(self):
+        return len(self._buf)
+
+
+@dataclasses.dataclass
+class Workspace:
+    """In-memory workspace state owned by the daemon.
+
+    Phase 2 populates only the serve side. Phase 3 adds claude_* fields.
+    """
+    name: str
+    wsdir: pathlib.Path
+    serve_proc: "asyncio.subprocess.Process | None" = None
+    serve_pkg_paths: list = dataclasses.field(default_factory=list)
+    serve_state: str = "not_running"
+    serve_ring: RingBuffer = dataclasses.field(default_factory=lambda: RingBuffer(SERVE_RING_BYTES))
+    serve_stdout_task: "asyncio.Task | None" = None
+    serve_started_at: float | None = None
+    serve_packages: list = dataclasses.field(default_factory=list)
+    serve_errors: list = dataclasses.field(default_factory=list)
+    serve_bend_registered: bool = False
+
+
 def _daemon_log_line(msg, **fields):
     """Append one JSON-line to the daemon log. Best-effort; swallows errors."""
     try:
@@ -815,10 +868,170 @@ class WsDaemon:
     async def _rpc_shutdown(self, req, writer):
         _daemon_log_line("shutdown requested")
         await self._respond(writer, {"ok": True})
-        # Schedule loop stop on the next tick so the ack drains first.
+        # Stop every serve child before the event loop closes, so we don't
+        # leak bend processes when the daemon goes down.
+        await self._stop_all_serves()
         loop = asyncio.get_running_loop()
         loop.call_later(0.05, self._shutdown_event.set)
         return None
+
+    # ---- serve lifecycle ----
+
+    async def _rpc_start_serve(self, req, writer):
+        name = normalize(req.get("name", ""))
+        if not name:
+            return {"ok": False, "error": "missing name"}
+        pkg_paths = [pathlib.Path(p) for p in req.get("pkgPaths") or []]
+        if not pkg_paths:
+            return {"ok": False, "error": "pkgPaths is empty"}
+        ws = self.workspaces.get(name)
+        if ws is None:
+            ws = Workspace(name=name, wsdir=ws_dir(name))
+            self.workspaces[name] = ws
+        if ws.serve_proc is not None and ws.serve_proc.returncode is None:
+            return {
+                "ok": False,
+                "error": f"serve already running for {name}",
+                "servePid": ws.serve_proc.pid,
+            }
+        ws.serve_pkg_paths = pkg_paths
+        ws.serve_ring = RingBuffer(SERVE_RING_BYTES)
+        ws.serve_state = "starting"
+        ws.serve_packages = []
+        ws.serve_errors = []
+        ws.serve_bend_registered = False
+        ws.serve_started_at = time.time()
+        await self._spawn_bend_serve(ws)
+        registered = await self._wait_for_bend_registration(ws.serve_started_at)
+        ws.serve_bend_registered = registered
+        return {
+            "ok": True,
+            "workspace": name,
+            "servePid": ws.serve_proc.pid if ws.serve_proc else None,
+            "bendRegistered": registered,
+            "state": ws.serve_state,
+        }
+
+    async def _spawn_bend_serve(self, ws):
+        ws.wsdir.mkdir(parents=True, exist_ok=True)
+        # Truncate the legacy .serve.log so existing parse_serve_log readers see
+        # fresh output. Dual-write to the file keeps cmd_logs/cmd_status working
+        # against the file while they're still on the pre-daemon read path.
+        log_file = serve_log_path(ws.name)
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        log_file.write_bytes(b"")
+        env = os.environ.copy()
+        env["BEND_WORKTREE"] = ws.name
+        env.setdefault("NODE_ARGS", "--max_old_space_size=16384")
+        cmd = [
+            "bend", "reactor", "serve",
+            *[str(p) for p in ws.serve_pkg_paths],
+            "--update", "--ts-watch", "--enable-tools", "--run-tests",
+        ]
+        _daemon_log_line(
+            "serve spawn", name=ws.name,
+            cmd=" ".join(shlex.quote(c) for c in cmd),
+        )
+        ws.serve_proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            cwd=str(ws.wsdir),
+            env=env,
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            start_new_session=True,
+        )
+        _daemon_log_line("serve pid", name=ws.name, pid=ws.serve_proc.pid)
+        ws.serve_stdout_task = asyncio.create_task(self._read_serve_stdout(ws))
+
+    async def _read_serve_stdout(self, ws):
+        """Drain bend stdout into the ring buffer + legacy .serve.log."""
+        proc = ws.serve_proc
+        log_file = serve_log_path(ws.name)
+        try:
+            with open(log_file, "ab") as logf:
+                while True:
+                    chunk = await proc.stdout.read(8192)
+                    if not chunk:
+                        break
+                    ws.serve_ring.append(chunk)
+                    try:
+                        logf.write(chunk)
+                        logf.flush()
+                    except OSError:
+                        pass
+                    self._refresh_serve_state(ws)
+        except Exception as exc:  # noqa: BLE001 — reader death is surfaced via state
+            _daemon_log_line("serve stdout reader error", name=ws.name, error=str(exc))
+        finally:
+            rc = await proc.wait()
+            _daemon_log_line("serve exited", name=ws.name, returncode=rc)
+            if ws.serve_state not in ("error",):
+                ws.serve_state = "not_running"
+
+    def _refresh_serve_state(self, ws):
+        text = ws.serve_ring.text()
+        result = parse_serve_log(text)
+        ws.serve_state = result["state"]
+        ws.serve_packages = result["packages"]
+        ws.serve_errors = result["errors"]
+
+    async def _wait_for_bend_registration(self, start_time, timeout=BEND_REGISTRATION_TIMEOUT_S):
+        """Block until bend writes a fresh *-introspection file to route-configs.
+
+        The workspace Claude's devex-mcp-server only scans route-configs at
+        startup, so bend must be registered BEFORE we launch Claude.
+        """
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if ROUTE_CONFIGS_DIR.exists():
+                for f in ROUTE_CONFIGS_DIR.iterdir():
+                    if not f.name.endswith("-introspection"):
+                        continue
+                    try:
+                        if f.stat().st_mtime >= start_time:
+                            _daemon_log_line("bend registered", introspection=f.name)
+                            return True
+                    except OSError:
+                        continue
+            await asyncio.sleep(1)
+        _daemon_log_line("bend registration timeout", timeout=timeout)
+        return False
+
+    async def _stop_serve(self, ws, grace=SERVE_STOP_GRACE_S):
+        """SIGTERM → wait → SIGKILL. No-op if serve isn't running."""
+        proc = ws.serve_proc
+        if proc is None or proc.returncode is not None:
+            return {"wasRunning": False}
+        pid = proc.pid
+        _daemon_log_line("serve stop: SIGTERM", name=ws.name, pid=pid)
+        try:
+            os.killpg(os.getpgid(pid), signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            pass
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=grace)
+        except asyncio.TimeoutError:
+            _daemon_log_line("serve stop: SIGKILL", name=ws.name, pid=pid)
+            try:
+                os.killpg(os.getpgid(pid), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                _daemon_log_line("serve stop: SIGKILL timeout", name=ws.name, pid=pid)
+        ws.serve_state = "not_running"
+        return {"wasRunning": True, "returncode": proc.returncode}
+
+    async def _stop_all_serves(self):
+        if not self.workspaces:
+            return
+        _daemon_log_line("shutting down all serves", count=len(self.workspaces))
+        await asyncio.gather(
+            *(self._stop_serve(ws) for ws in self.workspaces.values()),
+            return_exceptions=True,
+        )
 
 
 def _rpc_send(req, socket_path=WS_DAEMON_SOCKET, timeout=5.0):
