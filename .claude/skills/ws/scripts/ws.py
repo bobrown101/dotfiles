@@ -912,6 +912,51 @@ class WsDaemon:
             "state": ws.serve_state,
         }
 
+    async def _rpc_status(self, req, writer):
+        name = normalize(req.get("name", ""))
+        ws = self.workspaces.get(name)
+        if ws is None:
+            return {
+                "ok": True,
+                "workspace": name,
+                "state": "not_running",
+                "serveUp": False,
+                "claudeUp": False,
+                "packages": [],
+                "errors": [],
+                "urls": {},
+                "pkgPaths": [],
+                "bendRegistered": False,
+            }
+        serve_up = ws.serve_proc is not None and ws.serve_proc.returncode is None
+        return {
+            "ok": True,
+            "workspace": name,
+            "state": ws.serve_state,
+            "serveUp": serve_up,
+            "claudeUp": False,  # Phase 3 populates this
+            "servePid": ws.serve_proc.pid if serve_up else None,
+            "packages": ws.serve_packages,
+            "errors": ws.serve_errors,
+            "urls": _derive_urls_for(name),
+            "pkgPaths": [str(p) for p in ws.serve_pkg_paths],
+            "bendRegistered": ws.serve_bend_registered,
+        }
+
+    async def _rpc_list(self, req, writer):
+        items = []
+        for name, ws in sorted(self.workspaces.items()):
+            serve_up = ws.serve_proc is not None and ws.serve_proc.returncode is None
+            items.append({
+                "name": name,
+                "state": ws.serve_state,
+                "serveUp": serve_up,
+                "claudeUp": False,  # Phase 3 populates
+                "servePid": ws.serve_proc.pid if serve_up else None,
+                "pkgCount": len(ws.serve_pkg_paths),
+            })
+        return {"ok": True, "workspaces": items}
+
     async def _rpc_stop_serve(self, req, writer):
         name = normalize(req.get("name", ""))
         ws = self.workspaces.get(name)
@@ -1057,6 +1102,27 @@ class WsDaemon:
             *(self._stop_serve(ws) for ws in self.workspaces.values()),
             return_exceptions=True,
         )
+
+
+def _derive_urls_for(name):
+    """Best-effort URL resolution from the discovery cache. Mirrors cmd_status."""
+    cache = load_discovery_cache()
+    wsdir = ws_dir(name)
+    urls = {}
+    if not wsdir.exists():
+        return urls
+    for d in wsdir.iterdir():
+        if not d.is_dir() or d.name.startswith("."):
+            continue
+        repo_entry = cache.get(d.name, {})
+        for pkg_name, u in (repo_entry.get("urls") or {}).items():
+            lb = u.get("lb", "app")
+            basename = u.get("basename")
+            if not basename:
+                continue
+            domain = LB_DOMAIN_MAP.get(lb, f"{lb}.hubteamqa.com")
+            urls[pkg_name] = f"https://{name}.local.{domain}{basename}"
+    return urls
 
 
 def _rpc_send(req, socket_path=WS_DAEMON_SOCKET, timeout=5.0):

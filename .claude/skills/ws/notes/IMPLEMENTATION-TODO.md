@@ -32,8 +32,8 @@ No emoji, no `Co-Authored-By` footer on this branch.
 - [x] Daemon RPC: `start_serve` (Popen `bend reactor serve`, wire stdout → ring buffer)
 - [x] Daemon RPC: `stop_serve` (SIGTERM → 15s → SIGKILL)
 - [x] Daemon RPC: `restart_serve`
-- [ ] Daemon RPC: `status` (derive from ring buffer + process state)
-- [ ] Daemon RPC: `list`
+- [x] Daemon RPC: `status` (derive from ring buffer + process state)
+- [x] Daemon RPC: `list`
 - [ ] Daemon RPC: `tail_serve` (both follow and non-follow)
 - [ ] Daemon RPC: `remove_pkg`
 - [x] MCP ordering: `start_serve` blocks until `~/.hubspot/route-configs/<pid>-introspection` appears (port `_wait_for_bend_registration`)
