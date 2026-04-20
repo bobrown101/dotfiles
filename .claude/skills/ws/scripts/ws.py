@@ -1479,13 +1479,6 @@ def cmd_init(args):
 
     wsdir.mkdir(parents=True, exist_ok=True)
 
-    # Shared serve-commands session + per-workspace window (for bend output)
-    if not tmux_has_session(SHARED_SERVE_SESSION):
-        tmux("new-session", "-d", "-s", SHARED_SERVE_SESSION, "-n", "_placeholder")
-    if name not in tmux_list_windows(SHARED_SERVE_SESSION):
-        tmux("new-window", "-t", SHARED_SERVE_SESSION, "-n", name, "-c", str(wsdir))
-    tmux("kill-window", "-t", f"{SHARED_SERVE_SESSION}:_placeholder")
-
     # If repos were specified, do the full setup BEFORE launching the workspace
     # Claude. This ensures bend reactor serve has registered with route-configs
     # by the time the workspace Claude spawns its devex-mcp-server, so the
@@ -1502,14 +1495,20 @@ def cmd_init(args):
             repo_specs.append({"repo": repo, "remote": remote, "branch": branch})
 
         log(f"init: setting up {len(repo_specs)} repos (clone + yarn + discover)...")
-        setup_start = time.time()
         setup_results = _setup_repos(name, repo_specs)
 
         pkg_paths = _compute_pkg_paths(name, setup_results)
         if pkg_paths:
-            log(f"init: starting serve for {len(pkg_paths)} packages...")
-            _send_serve_command(name, pkg_paths)
-            _wait_for_bend_registration(setup_start, timeout=120)
+            log(f"init: starting serve for {len(pkg_paths)} packages via daemon...")
+            resp = daemon_rpc(
+                "start_serve",
+                name=name,
+                pkgPaths=[str(p) for p in pkg_paths],
+                timeout=BEND_REGISTRATION_TIMEOUT_S + 30,
+            )
+            if not resp.get("ok"):
+                emit_error(f"daemon start_serve failed: {resp.get('error')}")
+                return
         else:
             log("init: no packages to serve; skipping serve launch")
 
@@ -1546,7 +1545,6 @@ def cmd_init(args):
         "workspace": name,
         "parent": parent,
         "tmuxSession": tmux_session,
-        "serveWindow": f"{SHARED_SERVE_SESSION}:{name}",
         "workspaceDir": str(wsdir),
         "setup": setup_results,
     })
@@ -1712,18 +1710,27 @@ def cmd_setup(args):
     pkg_paths = _compute_pkg_paths(name, results)
 
     serve_started = False
+    serve_error = None
     if pkg_paths:
-        _send_serve_command(name, pkg_paths)
-        serve_started = True
+        log(f"setup: starting serve for {len(pkg_paths)} packages via daemon...")
+        resp = daemon_rpc(
+            "start_serve",
+            name=name,
+            pkgPaths=[str(p) for p in pkg_paths],
+            timeout=BEND_REGISTRATION_TIMEOUT_S + 30,
+        )
+        serve_started = bool(resp.get("ok"))
+        if not serve_started:
+            serve_error = resp.get("error")
 
     emit({
-        "ok": all(r.get("ok") for r in results),
+        "ok": all(r.get("ok") for r in results) and (not pkg_paths or serve_started),
         "workspace": name,
         "workspaceDir": str(wsdir),
         "repos": results,
         "servePackages": [str(p) for p in pkg_paths],
         "serveStarted": serve_started,
-        "serveWindow": f"{SHARED_SERVE_SESSION}:{name}",
+        "serveError": serve_error,
     })
 
 
@@ -1758,17 +1765,28 @@ def cmd_add(args):
     ]
     pkg_paths = _compute_pkg_paths(name, all_results)
 
-    _stop_serve(name, wait_timeout=30)
+    serve_restarted = False
+    serve_error = None
     if pkg_paths:
-        _send_serve_command(name, pkg_paths)
+        log(f"add: restarting serve for {len(pkg_paths)} packages via daemon...")
+        resp = daemon_rpc(
+            "restart_serve",
+            name=name,
+            pkgPaths=[str(p) for p in pkg_paths],
+            timeout=BEND_REGISTRATION_TIMEOUT_S + 30,
+        )
+        serve_restarted = bool(resp.get("ok"))
+        if not serve_restarted:
+            serve_error = resp.get("error")
 
     emit({
-        "ok": all(r.get("ok") for r in results),
+        "ok": all(r.get("ok") for r in results) and (not pkg_paths or serve_restarted),
         "workspace": name,
         "added": [r["repo"] for r in results],
         "repos": results,
         "servePackages": [str(p) for p in pkg_paths],
-        "serveRestarted": True,
+        "serveRestarted": serve_restarted,
+        "serveError": serve_error,
     })
 
 
@@ -2011,12 +2029,11 @@ def _stop_serve(name, wait_timeout=30):
 
 def cmd_stop(args):
     name = normalize(args.name)
-    result = _stop_serve(name)
-    if args.teardown:
-        tmux("kill-window", "-t", f"{SHARED_SERVE_SESSION}:{name}")
-        result["actions"].append(f"killed tmux window {SHARED_SERVE_SESSION}:{name}")
-
-    emit({"ok": True, "workspace": name, **result})
+    resp = daemon_rpc("stop_serve", name=name)
+    if not resp.get("ok"):
+        emit_error(f"daemon stop_serve failed: {resp.get('error')}")
+        return
+    emit(resp)
 
 
 # ---------------------------------------------------------------- Command: restart
@@ -2027,8 +2044,6 @@ def cmd_restart(args):
     if not wsdir.exists():
         emit_error(f"workspace dir does not exist: {wsdir}", recoverable=False)
         return
-
-    stop_result = _stop_serve(name)
 
     cache = load_discovery_cache()
     pkg_paths = []
@@ -2043,21 +2058,27 @@ def cmd_restart(args):
         else:
             pkg_paths.append(d)
 
-    # Recreate the serve window if it's missing
-    if not tmux_has_session(SHARED_SERVE_SESSION):
-        tmux("new-session", "-d", "-s", SHARED_SERVE_SESSION, "-n", "_placeholder")
-    if name not in tmux_list_windows(SHARED_SERVE_SESSION):
-        tmux("new-window", "-t", SHARED_SERVE_SESSION, "-n", name, "-c", str(wsdir))
+    if not pkg_paths:
+        emit_error(f"no packages found in {wsdir} to serve", recoverable=True)
+        return
 
-    if pkg_paths:
-        _send_serve_command(name, pkg_paths)
+    log(f"restart: restarting serve for {len(pkg_paths)} packages via daemon...")
+    resp = daemon_rpc(
+        "restart_serve",
+        name=name,
+        pkgPaths=[str(p) for p in pkg_paths],
+        timeout=BEND_REGISTRATION_TIMEOUT_S + 30,
+    )
+    if not resp.get("ok"):
+        emit_error(f"daemon restart_serve failed: {resp.get('error')}")
+        return
 
     emit({
         "ok": True,
         "workspace": name,
-        "stop": stop_result,
         "servePackages": [str(p) for p in pkg_paths],
-        "serveWindow": f"{SHARED_SERVE_SESSION}:{name}",
+        "servePid": resp.get("servePid"),
+        "bendRegistered": resp.get("bendRegistered"),
     })
 
 
@@ -2068,12 +2089,14 @@ def cmd_nuke(args):
     wsdir = ws_dir(name)
     actions = []
 
-    stop_result = _stop_serve(name)
-    actions.extend(stop_result["actions"])
-
-    # Kill tmux windows / sessions
-    tmux("kill-window", "-t", f"{SHARED_SERVE_SESSION}:{name}")
-    actions.append(f"killed window {SHARED_SERVE_SESSION}:{name}")
+    try:
+        stop_resp = daemon_rpc("stop_serve", name=name, autostart=False)
+        if stop_resp.get("ok"):
+            actions.append(f"daemon stop_serve: wasRunning={stop_resp.get('wasRunning')}")
+        else:
+            actions.append(f"daemon stop_serve failed: {stop_resp.get('error')}")
+    except DaemonNotRunning:
+        actions.append("daemon not running; skipped stop_serve")
 
     # Kill workspace session and any child sessions
     sessions_result = tmux("list-sessions", "-F", "#{session_name}")
@@ -2161,7 +2184,6 @@ def main():
 
     p = sub.add_parser("stop", help="Stop the serve daemon")
     p.add_argument("name")
-    p.add_argument("--teardown", action="store_true")
 
     p = sub.add_parser("restart", help="Stop + start serve")
     p.add_argument("name")
