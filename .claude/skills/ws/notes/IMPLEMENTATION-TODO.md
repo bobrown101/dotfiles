@@ -30,8 +30,8 @@ No emoji, no `Co-Authored-By` footer on this branch.
 ## Phase 2 — daemon owns serve
 
 - [x] Daemon RPC: `start_serve` (Popen `bend reactor serve`, wire stdout → ring buffer)
-- [ ] Daemon RPC: `stop_serve` (SIGTERM → 15s → SIGKILL) — helper `_stop_serve` exists; needs RPC wrapper
-- [ ] Daemon RPC: `restart_serve`
+- [x] Daemon RPC: `stop_serve` (SIGTERM → 15s → SIGKILL)
+- [x] Daemon RPC: `restart_serve`
 - [ ] Daemon RPC: `status` (derive from ring buffer + process state)
 - [ ] Daemon RPC: `list`
 - [ ] Daemon RPC: `tail_serve` (both follow and non-follow)

@@ -912,6 +912,31 @@ class WsDaemon:
             "state": ws.serve_state,
         }
 
+    async def _rpc_stop_serve(self, req, writer):
+        name = normalize(req.get("name", ""))
+        ws = self.workspaces.get(name)
+        if ws is None:
+            return {"ok": True, "wasRunning": False, "workspace": name}
+        result = await self._stop_serve(ws)
+        return {"ok": True, "workspace": name, **result}
+
+    async def _rpc_restart_serve(self, req, writer):
+        name = normalize(req.get("name", ""))
+        ws = self.workspaces.get(name)
+        pkg_paths_arg = req.get("pkgPaths")
+        if ws is None and not pkg_paths_arg:
+            return {"ok": False, "error": f"unknown workspace {name!r} and no pkgPaths given"}
+        if ws is not None:
+            await self._stop_serve(ws)
+        # Fresh pkgPaths override the previous set; otherwise reuse what we had.
+        new_paths = [str(p) for p in (pkg_paths_arg or (ws.serve_pkg_paths if ws else []))]
+        if not new_paths:
+            return {"ok": False, "error": "no pkgPaths to restart with"}
+        return await self._rpc_start_serve(
+            {"method": "start_serve", "name": name, "pkgPaths": new_paths},
+            writer,
+        )
+
     async def _spawn_bend_serve(self, ws):
         ws.wsdir.mkdir(parents=True, exist_ok=True)
         # Truncate the legacy .serve.log so existing parse_serve_log readers see
