@@ -709,6 +709,9 @@ class WsDaemon:
             _daemon_log_line("daemon stopped")
 
     async def _handle_client(self, reader, writer):
+        # Stash the reader on the writer so streaming RPCs (attach_claude)
+        # can read post-ack raw bytes from the same connection.
+        writer._ws_reader = reader
         try:
             line = await reader.readline()
             if not line:
@@ -1125,6 +1128,126 @@ class WsDaemon:
             return {"ok": True, "wasRunning": False, "workspace": name}
         result = await self._stop_claude(ws)
         return {"ok": True, "workspace": name, **result}
+
+    async def _rpc_attach_claude(self, req, writer):
+        """Attach to a running claude PTY.
+
+        Acks with newline-JSON, then switches the socket to raw bytes:
+        PTY output → client, client input → PTY. Multiple clients can
+        attach; all see output. All writable clients' input is merged
+        into the PTY (last-writer-wins semantics are TODO — for now
+        every writable client can type).
+        """
+        name = normalize(req.get("name", ""))
+        ws = self.workspaces.get(name)
+        if ws is None:
+            return {"ok": False, "error": f"unknown workspace {name!r}"}
+        if ws.claude_proc is None or ws.claude_proc.returncode is not None:
+            return {"ok": False, "error": f"claude not running for {name}"}
+        if ws.claude_master_fd is None:
+            return {"ok": False, "error": "claude pty fd is gone"}
+        readonly = bool(req.get("readonly"))
+        cols = req.get("cols")
+        rows = req.get("rows")
+        if cols and rows:
+            try:
+                ws.claude_cols = int(cols)
+                ws.claude_rows = int(rows)
+                _set_pty_size(ws.claude_master_fd, ws.claude_cols, ws.claude_rows)
+            except (ValueError, OSError):
+                pass
+        snap = ws.claude_ring.snapshot()
+        await self._respond(writer, {
+            "ok": True,
+            "protocol": "pty-stream",
+            "replayBytes": len(snap),
+            "cols": ws.claude_cols,
+            "rows": ws.claude_rows,
+        })
+        if snap:
+            writer.write(snap)
+            try:
+                await writer.drain()
+            except (ConnectionResetError, BrokenPipeError):
+                return None
+        q = asyncio.Queue(maxsize=256)
+        ws.claude_attach_subscribers.add(q)
+        reader = writer.get_extra_info("socket")
+        stream_reader = None
+        # Find the StreamReader associated with this connection. Rather than
+        # rummaging in private attrs, we use a transport pause/resume trick:
+        # read from the client side via a fresh reader hooked to the writer's
+        # transport. Simplest path: use the reader passed through _handle_client.
+        # We keep the reader reference in writer._reader via a monkey attr set
+        # there (see _handle_client). If not present, fall back to output-only.
+        stream_reader = getattr(writer, "_ws_reader", None)
+
+        async def pump_output():
+            try:
+                while True:
+                    chunk = await q.get()
+                    if chunk is None:
+                        break
+                    writer.write(chunk)
+                    try:
+                        await writer.drain()
+                    except (ConnectionResetError, BrokenPipeError):
+                        break
+            finally:
+                ws.claude_attach_subscribers.discard(q)
+
+        async def pump_input():
+            if readonly or stream_reader is None or ws.claude_master_fd is None:
+                return
+            loop = asyncio.get_running_loop()
+            while True:
+                try:
+                    data = await stream_reader.read(4096)
+                except (ConnectionResetError, BrokenPipeError):
+                    break
+                if not data:
+                    break
+                fd = ws.claude_master_fd
+                if fd is None:
+                    break
+                try:
+                    await loop.run_in_executor(None, os.write, fd, data)
+                except OSError:
+                    break
+
+        out_task = asyncio.create_task(pump_output())
+        in_task = asyncio.create_task(pump_input())
+        try:
+            done, pending = await asyncio.wait(
+                {out_task, in_task}, return_when=asyncio.FIRST_COMPLETED,
+            )
+            for t in pending:
+                t.cancel()
+            for t in pending:
+                try:
+                    await t
+                except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                    pass
+        finally:
+            ws.claude_attach_subscribers.discard(q)
+        return None
+
+    async def _rpc_resize_claude(self, req, writer):
+        name = normalize(req.get("name", ""))
+        ws = self.workspaces.get(name)
+        if ws is None:
+            return {"ok": False, "error": f"unknown workspace {name!r}"}
+        if ws.claude_master_fd is None:
+            return {"ok": False, "error": f"claude not running for {name}"}
+        try:
+            cols = int(req.get("cols") or ws.claude_cols)
+            rows = int(req.get("rows") or ws.claude_rows)
+        except ValueError:
+            return {"ok": False, "error": "cols/rows must be integers"}
+        ws.claude_cols = cols
+        ws.claude_rows = rows
+        _set_pty_size(ws.claude_master_fd, cols, rows)
+        return {"ok": True, "cols": cols, "rows": rows}
 
     async def _spawn_claude(self, ws):
         """Fork hsclaude under a PTY owned by the daemon.
