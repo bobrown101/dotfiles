@@ -24,11 +24,11 @@ Usage:
     uv run ws.py wait-ready <name> [--timeout 600]
     uv run ws.py urls <name>
     uv run ws.py logs <name> [--tail N] [--grep P]
-    uv run ws.py stop <name> [--teardown]
+    uv run ws.py stop <name>
     uv run ws.py restart <name>
     uv run ws.py nuke <name> [--delete-branches]
     uv run ws.py discover <repo-path>
-    uv run ws.py serve-daemon <name> <pkg-path>...  # internal
+    uv run ws.py daemon {run,start,stop,status,logs}
 """
 
 import argparse
@@ -58,11 +58,9 @@ WS_ROOT = SRC_ROOT / "workspaces"
 DISCOVERY_CACHE_PATH = WS_ROOT / "workspace-discovery-cache.json"
 ROUTE_CONFIGS_DIR = HOME / ".hubspot" / "route-configs"
 SERVE_LOG_NAME = ".serve.log"
-DAEMON_LOG_FILE = HOME / ".ws-serve.log"
 PORTAL_ID = "103830646"
 DEFAULT_ORG = "HubSpot"
 DEFAULT_BRANCH_PREFIX = "brbrown/"
-SHARED_SERVE_SESSION = "workspaces-serve-commands"
 LOG_TAIL_BYTES = 50_000
 
 # ws-daemon (single long-lived process; owns workspace state in memory).
@@ -182,11 +180,6 @@ def ws_dir(name):
 
 def serve_log_path(name):
     return ws_dir(name) / SERVE_LOG_NAME
-
-
-def daemon_marker(name):
-    """Unique substring to find the serve-daemon process with pgrep -f."""
-    return f"ws.py serve-daemon {normalize(name)}"
 
 
 # ---------------------------------------------------------------- Discovery cache
@@ -581,123 +574,6 @@ def parse_serve_log(text):
         "errors": errors[-10:],
         "allReady": all_ready,
     }
-
-
-# ---------------------------------------------------------------- serve-daemon (signal-trapping bend wrapper)
-
-class ServeDaemon:
-    def __init__(self, name, pkg_paths):
-        self.name = normalize(name)
-        self.pkg_paths = pkg_paths
-        self.bend_proc = None
-        self.orphan_thread = None
-        self._stopping = threading.Event()
-        self.original_ppid = os.getppid()
-        self.serve_log = serve_log_path(self.name)
-
-    def _daemon_log(self, msg):
-        try:
-            with open(DAEMON_LOG_FILE, "a") as f:
-                ts = time.strftime("%Y-%m-%d %H:%M:%S")
-                f.write(f"[{ts}] [ws-serve/{self.name}] (pid={os.getpid()}) {msg}\n")
-        except OSError:
-            pass
-
-    def _cleanup(self, reason):
-        self._daemon_log(f"cleanup: reason={reason}")
-        if self._stopping.is_set():
-            return
-        self._stopping.set()
-        if not self.bend_proc:
-            return
-        bend_pid = self.bend_proc.pid
-        if not pid_alive(bend_pid):
-            self._daemon_log(f"cleanup: bend pid={bend_pid} already dead")
-            return
-        self._daemon_log(f"cleanup: SIGTERM bend tree (root={bend_pid})")
-        kill_tree(bend_pid, signal.SIGTERM)
-        for _ in range(15):
-            if not pid_alive(bend_pid):
-                break
-            time.sleep(0.2)
-        if pid_alive(bend_pid):
-            self._daemon_log(f"cleanup: SIGKILL bend tree")
-            kill_tree(bend_pid, signal.SIGKILL)
-        self._daemon_log(f"cleanup: done")
-
-    def _install_signal_traps(self):
-        def handler(signum, _frame):
-            sig_name = signal.Signals(signum).name
-            self._daemon_log(f"signal: caught {sig_name}")
-            self._cleanup(f"signal {sig_name}")
-            sys.exit(0)
-        for sig in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
-            signal.signal(sig, handler)
-
-    def _orphan_monitor(self):
-        while not self._stopping.is_set():
-            time.sleep(5)
-            if self._stopping.is_set():
-                return
-            if self.bend_proc and self.bend_proc.poll() is not None:
-                return
-            try:
-                ppid = os.getppid()
-            except OSError:
-                continue
-            if ppid == 1 and self.original_ppid != 1:
-                self._daemon_log(f"orphan-monitor: PPID became 1 — cleaning up")
-                self._cleanup("orphaned")
-                os._exit(0)
-
-    def run(self):
-        self._daemon_log(f"--- ws-serve starting for {self.name} ---")
-        self._daemon_log(f"pkgs: {self.pkg_paths}")
-        self._daemon_log(f"original PPID: {self.original_ppid}")
-        self.serve_log.parent.mkdir(parents=True, exist_ok=True)
-        # Truncate so parse_serve_log sees fresh output
-        self.serve_log.write_text("")
-
-        self._install_signal_traps()
-
-        cmd = [
-            "bend", "reactor", "serve",
-            *self.pkg_paths,
-            "--update", "--ts-watch", "--enable-tools", "--run-tests",
-        ]
-        env = os.environ.copy()
-        env["BEND_WORKTREE"] = self.name
-        env["NODE_ARGS"] = env.get("NODE_ARGS", "--max_old_space_size=16384")
-
-        self._daemon_log(f"launching: {' '.join(cmd)}")
-        # Line-buffered, merge stderr, tee to log file + stdout.
-        self.bend_proc = subprocess.Popen(
-            cmd,
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            bufsize=1,
-            text=True,
-        )
-        self._daemon_log(f"bend pid={self.bend_proc.pid}")
-
-        self.orphan_thread = threading.Thread(target=self._orphan_monitor, daemon=True)
-        self.orphan_thread.start()
-
-        try:
-            with open(self.serve_log, "a") as logf:
-                for line in self.bend_proc.stdout:
-                    sys.stdout.write(line)
-                    sys.stdout.flush()
-                    logf.write(line)
-                    logf.flush()
-        except KeyboardInterrupt:
-            self._cleanup("KeyboardInterrupt")
-        finally:
-            rc = self.bend_proc.wait() if self.bend_proc else 1
-            self._daemon_log(f"bend exited code={rc}")
-            self._stopping.set()
-            sys.exit(rc)
 
 
 # ---------------------------------------------------------------- ws-daemon (singleton, in-memory registry)
@@ -1426,29 +1302,6 @@ def cmd_plan(args):
 
 # ---------------------------------------------------------------- Command: init
 
-def _wait_for_bend_registration(start_time, timeout=120):
-    """Wait until bend writes a fresh *-introspection file to route-configs.
-
-    The workspace Claude's devex-mcp-server only scans route-configs at startup,
-    so bend must be registered BEFORE we launch the workspace Claude. Otherwise
-    the MCP server finds nothing and the bend_* tools never appear.
-    """
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        if ROUTE_CONFIGS_DIR.exists():
-            for f in ROUTE_CONFIGS_DIR.iterdir():
-                if f.name.endswith("-introspection"):
-                    try:
-                        if f.stat().st_mtime >= start_time:
-                            log(f"bend registered: {f.name}")
-                            return True
-                    except OSError:
-                        continue
-        time.sleep(1)
-    log(f"WARN: no fresh bend introspection after {timeout}s")
-    return False
-
-
 def _compute_pkg_paths(name, setup_results):
     wsdir = ws_dir(name)
     pkg_paths = []
@@ -1607,16 +1460,6 @@ def has_claude_md(repo_clone):
 
 def select_packages(discovery):
     return [p["name"] for p in discovery["packages"] if p["isDefault"]]
-
-
-def _send_serve_command(name, pkg_paths):
-    """Send `uv run ws.py serve-daemon <name> <pkgs>` to the tmux serve window."""
-    serve_cmd = (
-        f"uv run {shlex.quote(str(THIS_FILE))} serve-daemon "
-        f"{shlex.quote(name)} "
-        + " ".join(shlex.quote(str(p)) for p in pkg_paths)
-    )
-    tmux("send-keys", "-t", f"{SHARED_SERVE_SESSION}:{name}", serve_cmd, "Enter")
 
 
 def _setup_repos(name, repo_specs, existing_only=False):
@@ -1792,10 +1635,6 @@ def cmd_add(args):
 
 # ---------------------------------------------------------------- Command: status
 
-def _serve_is_up(name):
-    return len(pgrep_f(daemon_marker(name))) > 0
-
-
 def cmd_status(args):
     name = normalize(args.name)
     try:
@@ -1952,43 +1791,6 @@ def cmd_logs(args):
 
 # ---------------------------------------------------------------- Command: stop
 
-def _stop_serve(name, wait_timeout=30):
-    """Send SIGTERM to serve-daemon, escalate to SIGKILL. Return list of actions."""
-    name = normalize(name)
-    marker = daemon_marker(name)
-    pids = pgrep_f(marker)
-    actions = []
-    if not pids:
-        return {"actions": ["no daemon found"], "pidsKilled": []}
-
-    for pid in pids:
-        try:
-            os.kill(pid, signal.SIGTERM)
-            actions.append(f"SIGTERM pid={pid}")
-        except ProcessLookupError:
-            actions.append(f"pid={pid} already gone")
-            continue
-
-    deadline = time.time() + wait_timeout
-    while time.time() < deadline:
-        remaining = [p for p in pids if pid_alive(p)]
-        if not remaining:
-            actions.append("all stopped gracefully")
-            return {"actions": actions, "pidsKilled": pids}
-        time.sleep(1)
-
-    # Escalate
-    still_alive = [p for p in pids if pid_alive(p)]
-    for pid in still_alive:
-        actions.append(f"SIGKILL pid={pid}")
-        try:
-            kill_tree(pid, signal.SIGKILL)
-        except Exception as e:
-            actions.append(f"kill_tree failed: {e}")
-
-    return {"actions": actions, "pidsKilled": pids}
-
-
 def cmd_stop(args):
     name = normalize(args.name)
     resp = daemon_rpc("stop_serve", name=name)
@@ -2093,15 +1895,6 @@ def cmd_nuke(args):
     })
 
 
-# ---------------------------------------------------------------- Command: serve-daemon
-
-def cmd_serve_daemon(args):
-    name = normalize(args.name)
-    pkg_paths = args.pkgs
-    daemon = ServeDaemon(name, pkg_paths)
-    daemon.run()
-
-
 # ---------------------------------------------------------------- main
 
 def main():
@@ -2158,11 +1951,6 @@ def main():
     p.add_argument("repo_path")
     p.add_argument("--workspace", default=None)
 
-    p = sub.add_parser("serve-daemon",
-                       help="(internal) bend serve wrapper with signal traps")
-    p.add_argument("name")
-    p.add_argument("pkgs", nargs="+")
-
     p = sub.add_parser("daemon", help="ws-daemon lifecycle (single long-lived process)")
     dsub = p.add_subparsers(dest="daemon_command", required=True)
     dsub.add_parser("run", help="Foreground event loop (used by `start` after fork)")
@@ -2199,7 +1987,6 @@ def main():
         "restart": cmd_restart,
         "nuke": cmd_nuke,
         "discover": cmd_discover,
-        "serve-daemon": cmd_serve_daemon,
     }
     handlers[args.command](args)
 
