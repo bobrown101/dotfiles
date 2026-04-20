@@ -6,7 +6,7 @@ argument-hint: "up <name> <repo[:branch]...>"
 
 # Workspace Manager
 
-Manage isolated multi-repo development workspaces. Each workspace gets its own git clones, `bend serve` instance (with a unique subdomain), and tmux session.
+Manage isolated multi-repo development workspaces. Each workspace gets its own git clones and its own `bend serve` instance (with a unique subdomain). A single long-lived `ws-daemon` owns every serve; the workspace Claude still runs in its own tmux session (for now — Phase 3 moves Claude under the daemon too).
 
 See `ARCHITECTURE.md` in this dir for the full component map and a sequence diagram of the create → work → teardown flow. This file is the operating manual; that one is the map.
 
@@ -28,10 +28,10 @@ Two Claude instances are involved:
 
 ## Critical safety rules
 
-- **NEVER use `pkill -f` with the workspace name or workspace path.** This WILL match and kill the Claude process itself. Use `ws.py stop` instead — it targets the serve-daemon via a specific marker.
+- **NEVER use `pkill -f` with the workspace name or workspace path.** This WILL match and kill the Claude process itself. Use `ws.py stop` instead — it asks the ws-daemon to signal bend over RPC.
 - **NEVER delete git branches** unless the user explicitly asks. Only `ws.py nuke --delete-branches` does this, and the creator should confirm with the user first.
 - **NEVER do setup work from the creator.** After `ws.py init` launches the workspace Claude, the creator is done.
-- **NEVER hand-manage the bend serve daemon.** Do not send `C-c` / `bend reactor serve …` to the serve tmux window, do not `kill` the serve PID, do not reconstruct a `bend reactor serve` command from `ps` output. Every serve lifecycle operation — start, stop, restart, adding a package — goes through `ws.py`. Hand-rolled restarts drop registration in `~/.hubspot/route-configs/` (so `serveUp` flips false in status), and reconstructed commands silently miss the `--env bend-instance=<name>` / `--env local-static-domain=<name>.local.hsappstatic.net` flags — the instance URL then stops resolving or, worse, serves a different workspace's packages. If you think you need to touch serve directly, you don't; use `ws.py restart <name>` (or `stop` / `add`) instead.
+- **NEVER hand-manage the bend serve process.** Do not `kill` the serve PID, do not spawn `bend reactor serve …` yourself, do not reconstruct a `bend reactor serve` command from `ps` output. Every serve lifecycle operation — start, stop, restart, adding a package — goes through `ws.py` (which talks to the ws-daemon). Hand-rolled restarts drop registration in `~/.hubspot/route-configs/` (so `serveUp` flips false in status), and reconstructed commands silently miss the `--env bend-instance=<name>` / `--env local-static-domain=<name>.local.hsappstatic.net` flags — the instance URL then stops resolving or, worse, serves a different workspace's packages. If you think you need to touch serve directly, you don't; use `ws.py restart <name>` (or `stop` / `add`) instead.
 
 ## Conventions
 
@@ -70,7 +70,7 @@ If repos are given in natural language (e.g. "Customer Data Table"), match again
    ```
    The JSON output tells you: normalized workspace name, detected parent (if cwd is under another workspace), resolved remotes, branches, and any unresolved repos. If `ok: false`, show the `missingRepos` and stop — don't proceed.
 
-2. **Briefly state what you're doing** (one line — workspace name + repos). Don't wait for approval; proceed straight to step 3. Tell the user up front that init will take a few minutes; they can watch bend compile in the `workspaces-serve-commands:<name>` tmux window while they wait.
+2. **Briefly state what you're doing** (one line — workspace name + repos). Don't wait for approval; proceed straight to step 3. Tell the user up front that init will take a few minutes; they can tail bend output with `ws.py logs <name> --tail 200` while they wait.
 
 3. **Write the handoff prompt** to `/tmp/ws-<name>-init-prompt.txt` using the Write tool. Template in "Building the handoff prompt" below.
 
@@ -116,9 +116,9 @@ Everything below this line is included verbatim in the handoff prompt. The works
 
 ## Critical safety rules
 
-- **NEVER use `pkill -f` with the workspace name or workspace path.** Use `ws.py stop` — it targets the serve-daemon via a specific marker.
+- **NEVER use `pkill -f` with the workspace name or workspace path.** Use `ws.py stop` — it asks the ws-daemon to signal bend over RPC.
 - **NEVER delete git branches** unless the user explicitly asks.
-- **NEVER hand-manage the bend serve daemon.** Do not send `C-c` / `bend reactor serve …` to the serve tmux window, do not `kill` the serve PID, do not reconstruct a `bend reactor serve` command from `ps` output. Serve lifecycle — start, stop, restart, add-a-package — is always `ws.py restart|stop|add`. Hand-rolled restarts drop registration in `~/.hubspot/route-configs/` (`serveUp` flips false) and reconstructed commands silently miss the `--env bend-instance=<name>` / `--env local-static-domain=<name>.local.hsappstatic.net` flags — the instance URL then stops resolving. If serve looks stuck, `ws.py status <name>` first, then `ws.py restart <name>`.
+- **NEVER hand-manage the bend serve process.** Do not `kill` the serve PID, do not spawn `bend reactor serve …` yourself, do not reconstruct a `bend reactor serve` command from `ps` output. Serve lifecycle — start, stop, restart, add-a-package — is always `ws.py restart|stop|add`. Hand-rolled restarts drop registration in `~/.hubspot/route-configs/` (`serveUp` flips false) and reconstructed commands silently miss the `--env bend-instance=<name>` / `--env local-static-domain=<name>.local.hsappstatic.net` flags — the instance URL then stops resolving. If serve looks stuck, `ws.py status <name>` first, then `ws.py restart <name>`.
 
 ## Commands
 
@@ -133,7 +133,7 @@ Alias `WS=uv run ~/src/dotfiles/.claude/skills/ws/scripts/ws.py` mentally — co
 | `wait-ready <name> --timeout 600` | Blocks until `state: ready` (or timeout) |
 | `urls <name>` | Resolved app + test URLs. Use `url` field verbatim |
 | `logs <name> --tail N [--grep P]` | Serve log tail. Sets `tailOnly`/`truncated` flags |
-| `stop <name> [--teardown]` | SIGTERM the daemon; escalates to SIGKILL after 30s |
+| `stop <name>` | Asks ws-daemon to SIGTERM bend; escalates to SIGKILL after 15s |
 | `restart <name>` | `stop` + re-launch |
 | `nuke <name> [--delete-branches]` | Full teardown. Confirm with user before `--delete-branches` |
 
@@ -183,7 +183,7 @@ When the user asks for monitoring, launch a background agent with:
 - `<pkg>`: `<url>`
 **Test URLs**: - `<pkg>`: `<test-url>`
 **Log check**: clean.
-**Serve**: `workspaces-serve-commands:<name>`.
+**Serve**: owned by ws-daemon (tail with `ws.py logs <name>`).
 ```
 
 **Setup failed**:
