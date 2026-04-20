@@ -1798,61 +1798,25 @@ def _serve_is_up(name):
 
 def cmd_status(args):
     name = normalize(args.name)
-    log_path = serve_log_path(name)
-    if not log_path.exists():
+    try:
+        resp = daemon_rpc("status", name=name, autostart=False)
+    except DaemonNotRunning:
         emit({
             "ok": True,
             "workspace": name,
             "state": "not_running",
-            "serveUp": _serve_is_up(name),
+            "serveUp": False,
+            "claudeUp": False,
             "packages": [],
-            "errors": [{"type": "NO_LOG", "fatal": True, "line": f"No serve log at {log_path}"}],
-            "allReady": False,
-            "logPath": str(log_path),
+            "errors": [],
+            "urls": {},
+            "bendRegistered": False,
+            "daemonRunning": False,
         })
         return
-
-    mtime = os.path.getmtime(log_path)
-    stale_seconds = round(time.time() - mtime, 1)
-    text, total_bytes = read_tail(log_path)
-    result = parse_serve_log(text)
-
-    if stale_seconds > 60 and result["state"] == "starting":
-        result["state"] = "stale"
-        result["errors"].append({
-            "type": "STALE_LOG", "fatal": True,
-            "line": f"Log not updated in {round(stale_seconds)}s and no packages detected",
-        })
-
-    cache = load_discovery_cache()
-    wsdir = ws_dir(name)
-    urls = {}
-    if wsdir.exists():
-        for d in wsdir.iterdir():
-            if not d.is_dir() or d.name.startswith("."):
-                continue
-            repo_entry = cache.get(d.name, {})
-            repo_urls = repo_entry.get("urls", {})
-            for pkg_name, u in repo_urls.items():
-                lb = u.get("lb", "app")
-                basename = u.get("basename")
-                if basename:
-                    domain = LB_DOMAIN_MAP.get(lb, f"{lb}.hubteamqa.com")
-                    urls[pkg_name] = f"https://{name}.local.{domain}{basename}"
-
-    emit({
-        "ok": True,
-        "workspace": name,
-        "state": result["state"],
-        "serveUp": _serve_is_up(name),
-        "allReady": result["allReady"],
-        "packages": result["packages"],
-        "errors": result["errors"],
-        "urls": urls,
-        "staleSeconds": stale_seconds,
-        "logPath": str(log_path),
-        "logBytes": total_bytes,
-    })
+    resp["daemonRunning"] = True
+    resp.setdefault("allReady", resp.get("state") == "ready")
+    emit(resp)
 
 
 # ---------------------------------------------------------------- Command: wait-ready
@@ -1864,20 +1828,18 @@ def cmd_wait_ready(args):
     poll_interval = 5
 
     while time.time() < deadline:
-        log_path = serve_log_path(name)
-        if not log_path.exists():
+        try:
+            resp = daemon_rpc("status", name=name, autostart=False)
+            state = resp.get("state", "not_running")
+        except DaemonNotRunning:
             state = "not_running"
-        else:
-            text, _ = read_tail(log_path)
-            parsed = parse_serve_log(text)
-            state = parsed["state"]
-            if state == "ready":
-                cmd_status(args)
-                return
-            if state == "error":
-                log(f"[{name}] reached error state; aborting wait")
-                cmd_status(args)
-                return
+        if state == "ready":
+            cmd_status(args)
+            return
+        if state == "error":
+            log(f"[{name}] reached error state; aborting wait")
+            cmd_status(args)
+            return
         if state != last_state:
             log(f"[{name}] state={state}")
             last_state = state

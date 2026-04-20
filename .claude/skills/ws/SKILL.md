@@ -31,6 +31,7 @@ Two Claude instances are involved:
 - **NEVER use `pkill -f` with the workspace name or workspace path.** This WILL match and kill the Claude process itself. Use `ws.py stop` instead — it targets the serve-daemon via a specific marker.
 - **NEVER delete git branches** unless the user explicitly asks. Only `ws.py nuke --delete-branches` does this, and the creator should confirm with the user first.
 - **NEVER do setup work from the creator.** After `ws.py init` launches the workspace Claude, the creator is done.
+- **NEVER hand-manage the bend serve daemon.** Do not send `C-c` / `bend reactor serve …` to the serve tmux window, do not `kill` the serve PID, do not reconstruct a `bend reactor serve` command from `ps` output. Every serve lifecycle operation — start, stop, restart, adding a package — goes through `ws.py`. Hand-rolled restarts drop registration in `~/.hubspot/route-configs/` (so `serveUp` flips false in status), and reconstructed commands silently miss the `--env bend-instance=<name>` / `--env local-static-domain=<name>.local.hsappstatic.net` flags — the instance URL then stops resolving or, worse, serves a different workspace's packages. If you think you need to touch serve directly, you don't; use `ws.py restart <name>` (or `stop` / `add`) instead.
 
 ## Conventions
 
@@ -69,19 +70,7 @@ If repos are given in natural language (e.g. "Customer Data Table"), match again
    ```
    The JSON output tells you: normalized workspace name, detected parent (if cwd is under another workspace), resolved remotes, branches, and any unresolved repos. If `ok: false`, show the `missingRepos` and stop — don't proceed.
 
-2. **Show the plan to the user and wait for approval**. Format from the JSON:
-   ```
-   Here's the plan:
-
-   Workspace: <name>
-   Parent: <parent>  (only if detected)
-   Repos & branches:
-     <repo1> -> <branch1>
-     <repo2> -> <branch2>
-   tmux session: <tmuxSession>
-
-   OK to proceed?
-   ```
+2. **Briefly state what you're doing** (one line — workspace name + repos). Don't wait for approval; proceed straight to step 3. Tell the user up front that init will take a few minutes; they can watch bend compile in the `workspaces-serve-commands:<name>` tmux window while they wait.
 
 3. **Write the handoff prompt** to `/tmp/ws-<name>-init-prompt.txt` using the Write tool. Template in "Building the handoff prompt" below.
 
@@ -90,7 +79,6 @@ If repos are given in natural language (e.g. "Customer Data Table"), match again
    uv run {{SKILL_PATH}}/scripts/ws.py init <name> [--parent <parent>] \
      --repos <repo1>:<branch1> <repo2>:<branch2> ...
    ```
-   Tell the user up front it'll take a few minutes; they can watch bend compile in the `workspaces-serve-commands:<name>` tmux window while they wait.
 
 5. **Tell the user** the tmux session name to switch to (from the `tmuxSession` field of init's JSON output). Done.
 
@@ -130,6 +118,7 @@ Everything below this line is included verbatim in the handoff prompt. The works
 
 - **NEVER use `pkill -f` with the workspace name or workspace path.** Use `ws.py stop` — it targets the serve-daemon via a specific marker.
 - **NEVER delete git branches** unless the user explicitly asks.
+- **NEVER hand-manage the bend serve daemon.** Do not send `C-c` / `bend reactor serve …` to the serve tmux window, do not `kill` the serve PID, do not reconstruct a `bend reactor serve` command from `ps` output. Serve lifecycle — start, stop, restart, add-a-package — is always `ws.py restart|stop|add`. Hand-rolled restarts drop registration in `~/.hubspot/route-configs/` (`serveUp` flips false) and reconstructed commands silently miss the `--env bend-instance=<name>` / `--env local-static-domain=<name>.local.hsappstatic.net` flags — the instance URL then stops resolving. If serve looks stuck, `ws.py status <name>` first, then `ws.py restart <name>`.
 
 ## Commands
 
