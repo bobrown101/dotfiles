@@ -1,9 +1,9 @@
 sequenceDiagram
     actor User as 👤 User
     actor WsC as 🤖 Workspace Claude
-    participant WS as 🐍 ws.py
+    participant WS as 🐍 ws.py (client)
+    participant D as 🛰️ ws-daemon
     participant FS as 📂 Filesystem
-    participant Tmux as 🪟 tmux
     participant Bend as 🏗️ bend serve
 
     User->>WsC: also add hs-entities:brbrown/my-feature
@@ -11,8 +11,10 @@ sequenceDiagram
     WS->>FS: git clone + bend yarn (parallel)
     WS->>FS: discover, merge into cache
     WS->>WS: compute combined pkg paths (old + new)
-    WS->>Bend: stop (SIGTERM, then SIGKILL if needed)
-    WS->>Tmux: send-keys restart with all packages
-    Tmux->>Bend: bend reactor serve ... (new pkg list)
+    WS->>D: restart_serve RPC (combined pkg list)
+    D->>Bend: killpg SIGTERM → SIGKILL
+    D->>Bend: spawn fresh bend reactor serve --enable-tools ...
+    Bend->>FS: new <pid>-introspection in route-configs/
+    D-->>WS: {ok, servePid}
     WS-->>WsC: add JSON (per-repo results)
     WsC->>User: updated report

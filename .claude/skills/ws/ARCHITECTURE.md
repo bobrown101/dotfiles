@@ -1,6 +1,6 @@
 # Workspace architecture
 
-This is the reference map for how `ws.py`, tmux, `bend reactor serve`, and the two Claude instances (creator + workspace) fit together. SKILL.md is the operating manual; this file is the map.
+This is the reference map for how `ws.py`, `ws-daemon`, `bend reactor serve`, and the two Claude instances (creator + workspace) fit together. SKILL.md is the operating manual; this file is the map.
 
 ## Cast of characters
 
@@ -9,23 +9,24 @@ This is the reference map for how `ws.py`, tmux, `bend reactor serve`, and the t
 | 👤 **User** | Asks for workspaces, works in them, tears them down. |
 | 🤖 **Creator Claude** | The top-level Claude the user is chatting with. Plans the workspace, writes the handoff prompt, invokes `ws.py init`. Thin. |
 | 🐍 **ws.py** | Single-file Python CLI at `scripts/ws.py`. All orchestration: validate, clone, yarn, discover, serve, stop, status, nuke. Emits JSON. |
-| 📂 **Filesystem** | Four locations that act as shared state: `~/src/<repo>` (source clones), `~/src/workspaces/<name>/` (workspace dir + `.serve.log`), `~/src/workspaces/workspace-discovery-cache.json` (package/URL cache), `~/.hubspot/route-configs/<pid>-introspection` (bend's MCP handshake). No other metadata stores exist. |
-| 🪟 **tmux** | Two sessions matter: `workspaces-serve-commands:<name>` (one window per workspace, runs `bend reactor serve`), and `<name>` (or `<parent>/<name>`, the workspace's Claude session). |
-| 🏗️ **bend serve** | `bend reactor serve --enable-tools --ts-watch --run-tests`, wrapped by `ws.py serve-daemon` (Python signal traps + orphan monitor). Writes `.serve.log` and `~/.hubspot/route-configs/<pid>-introspection`. |
-| 🧰 **hsclaude** | `/Users/brbrown/.local/bin/hsclaude` → `dvx claude`. The wrapper that wires up HubSpot MCP servers. Launching bare `claude` skips this, so spawned Claudes must go through `hsclaude`. |
-| 🤖 **Workspace Claude** | The nested Claude running inside the workspace tmux session. Confirms setup, runs `wait-ready` + log-check, reports, then does whatever the user asks. |
+| 📂 **Filesystem** | Three kinds of shared state: `~/src/<repo>` (source clones), `~/src/workspaces/<name>/` (workspace dir + clones), `~/src/workspaces/workspace-discovery-cache.json` (package/URL cache). Bend itself also writes `~/.hubspot/route-configs/<pid>-introspection` for its MCP handshake — we read it but don't own it. Everything else lives in memory inside ws-daemon. |
+| 🛰️ **ws-daemon** | Single long-lived asyncio process. Binds `~/.ws-daemon.sock` (mode 0600). Owns every `bend reactor serve` Popen and every workspace Claude PTY (pty.openpty + subprocess). Holds per-workspace ring buffers for serve stdout and claude PTY output. Every `ws.py` subcommand that touches live state is a thin RPC client to this daemon. Dies = everything dies (intentional). Auto-started on first client RPC. |
+| 🏗️ **bend serve** | `bend reactor serve --enable-tools --ts-watch --run-tests`, spawned by ws-daemon as a subprocess. stdout streams into the daemon's in-memory ring buffer. Bend writes `~/.hubspot/route-configs/<pid>-introspection` on startup. |
+| 🧰 **hsclaude** | `/Users/brbrown/.local/bin/hsclaude` → `dvx claude`. The wrapper that wires up HubSpot MCP servers. Spawned by ws-daemon under a PTY (master fd owned by the daemon, slave becomes claude's stdio and is closed in the daemon after exec). |
+| 🤖 **Workspace Claude** | The nested Claude running under ws-daemon's PTY. Users attach via `ws.py attach-claude <name>`, which proxies bytes over the daemon socket (raw mode, Ctrl-\ detach). Multiple clients can attach read-only; last writable client owns input. |
 | 🔌 **devex-mcp-server** | Spawned as a subprocess of each Claude instance (via `hsclaude`). Scans `~/.hubspot/route-configs/` **at startup** to find running bend serves, then exposes their tools (`bend_compile`, `bend_package_ts_get_errors`, etc.) as deferred MCP tools. Only re-scans on Claude restart. |
 
 ## The ordering constraint that drives the whole design
 
 The MCP server scans `route-configs/` **once, at startup**. So the sequence has to be:
 
-1. `ws.py` starts `bend reactor serve`
-2. Bend writes `<pid>-introspection` to `route-configs/`
-3. *Then* `ws.py` launches the Workspace Claude
-4. Workspace Claude spawns `devex-mcp-server` → it finds bend → tools register
+1. `ws.py init` (client) asks ws-daemon to `start_serve`
+2. Daemon spawns `bend reactor serve` and bend writes `<pid>-introspection` to `route-configs/`
+3. Daemon's `_wait_for_bend_registration` snapshots the dir pre-spawn and waits for a *new* file name to appear — then returns success to the client
+4. `ws.py init` then calls `start_claude`, which makes the daemon spawn `hsclaude` under a PTY
+5. Workspace Claude spawns `devex-mcp-server` → it finds bend → tools register
 
-If (3) happens before (2), the MCP server scans an empty directory, finds nothing, and the workspace Claude has no bend tools — with no way to trigger a rescan short of restarting. That's why `ws.py init` blocks on `_wait_for_bend_registration` between serve launch and Claude launch.
+If (4) happens before (2)/(3), the MCP server scans an empty directory, finds nothing, and the workspace Claude has no bend tools — with no way to trigger a rescan short of restarting. The invariant lives inside the daemon now (in `_rpc_start_serve`), so any client that uses the RPC gets the ordering for free.
 
 ## Full sequence: create → work → tear down
 
@@ -41,13 +42,13 @@ Source: [`diagrams/sequence-add.mmd`](diagrams/sequence-add.mmd).
 
 ## Why `ws.py init` blocks instead of delegating to the Workspace Claude
 
-An earlier version of this design had `ws.py init` just create tmux and launch the workspace Claude; the workspace Claude then called `ws.py add` to clone, yarn, and start serve. That failed because:
+An earlier version of this design had `ws.py init` just launch the workspace Claude; the workspace Claude then called `ws.py add` to clone, yarn, and start serve. That failed because:
 
 1. Workspace Claude spawned before any clone/yarn/serve work.
 2. Its `devex-mcp-server` scanned an empty `route-configs/`.
 3. Seconds later, `add` started bend, but the MCP scan had already happened. No bend tools in the session.
 
-Moving the setup into `init` (with `_wait_for_bend_registration` between serve start and Claude launch) makes the MCP scan deterministic. The trade-off is that the creator's bash call blocks for minutes — the user sees a single "this will take a few minutes, watch compile in the serve window" message and can just wait.
+Moving the setup into `init` (with daemon-side `_wait_for_bend_registration` between serve start and Claude launch) makes the MCP scan deterministic. The trade-off is that the creator's CLI call blocks for minutes — the user sees a single "this will take a few minutes; you can tail bend with `ws.py logs`" message and can just wait.
 
 ## Files to read when extending this system
 
