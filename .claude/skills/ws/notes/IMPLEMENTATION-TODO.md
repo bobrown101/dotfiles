@@ -24,7 +24,7 @@ No emoji, no `Co-Authored-By` footer on this branch.
 - [x] Add `ws.py daemon stop` (RPC `shutdown`, wait for socket cleanup)
 - [x] Add `ws.py daemon status` (socket connect + `ping`)
 - [x] Add `ws.py daemon logs` (tail `~/.ws-daemon.log`)
-- [ ] Auto-start logic in all RPC-client commands (opt-out via `--no-autostart`) — helper `daemon_rpc(..., autostart=True)` written, but no RPC-client commands exist yet (Phase 2)
+- [x] Auto-start logic in all RPC-client commands (opt-out via `--no-autostart`) — helper `daemon_rpc(..., autostart=True)` now used by every rewired command
 - [x] Verify: `ws.py daemon start` → `ws.py daemon status` returns running; `ws.py daemon stop` returns; socket file gone
 
 ## Phase 2 — daemon owns serve
@@ -37,9 +37,9 @@ No emoji, no `Co-Authored-By` footer on this branch.
 - [x] Daemon RPC: `tail_serve` (both follow and non-follow)
 - [x] Daemon RPC: `remove_pkg`
 - [x] MCP ordering: `start_serve` blocks until `~/.hubspot/route-configs/<pid>-introspection` appears (port `_wait_for_bend_registration`)
-- [ ] Rewire `cmd_init` / `cmd_setup` / `cmd_add` / `cmd_restart` / `cmd_stop` to call daemon
-- [ ] Delete `ServeDaemon` class, `_send_serve_command`, `SHARED_SERVE_SESSION`, `daemon_marker`
-- [ ] Update `SKILL.md` serve-related guidance
+- [x] Rewire `cmd_init` / `cmd_setup` / `cmd_add` / `cmd_restart` / `cmd_stop` / `cmd_nuke` / `cmd_status` / `cmd_wait_ready` to call daemon
+- [x] Delete `ServeDaemon` class, `_send_serve_command`, `SHARED_SERVE_SESSION`, `daemon_marker`, module-level `_stop_serve` / `_serve_is_up` / `_wait_for_bend_registration`, `DAEMON_LOG_FILE`, `cmd_serve_daemon`, `serve-daemon` subparser, `--teardown` flag
+- [x] Update `SKILL.md` serve-related guidance
 - [ ] End-to-end test: spin up workspace, serve registers, bend tools load in a fresh Claude session
 
 ## Phase 3 — daemon owns Claude

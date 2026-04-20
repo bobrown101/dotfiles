@@ -24,6 +24,26 @@ Entry format:
 
 **Next**: Phase 2 — daemon owns `bend reactor serve`. Start with the `Workspace` in-memory dataclass + `start_serve` RPC (MCP ordering: must block until `~/.hubspot/route-configs/<pid>-introspection` appears). Port `_wait_for_bend_registration` from `cmd_init` into the daemon.
 
+---
+
+## 2026-04-20 (session 2)
+
+**Did**:
+- **Phase 2 coding complete.** Daemon RPCs `start_serve`, `stop_serve`, `restart_serve`, `status`, `list`, `tail_serve`, `remove_pkg` all landed over ~7 earlier-session commits.
+- Rewired every CLI serve-facing command to the daemon: `cmd_init`, `cmd_setup`, `cmd_add`, `cmd_restart`, `cmd_stop`, `cmd_nuke`, `cmd_status`, `cmd_wait_ready`. No command still touches tmux for serve.
+- Deleted the legacy serve plumbing (~215 lines): `ServeDaemon` class + `cmd_serve_daemon` + `serve-daemon` subparser + module-level `_stop_serve`/`_serve_is_up`/`_wait_for_bend_registration`/`_send_serve_command`/`daemon_marker`/`SHARED_SERVE_SESSION`/`DAEMON_LOG_FILE`/`--teardown` flag.
+- Scrubbed `SKILL.md` of tmux `workspaces-serve-commands:*` references and the `--teardown` flag. Workspace-Claude-in-tmux language left intact (Phase 3 handles that).
+- Smoke-tested: `ws.py daemon status` shows running:false clean; `ws.py status foo` returns not_running via the new path; argparse help tree no longer advertises serve-daemon.
+
+**Next**: Phase 2 close-out — an **end-to-end test** before cutting Phase 3: `ws.py init <name> <repo>`, confirm bend registers in `~/.hubspot/route-configs/`, confirm workspace Claude sees bend_* tools, `ws.py nuke <name>` cleans up, `pgrep -f bend.reactor.serve` = 0. If it's clean, Phase 3 begins with `start_claude` RPC (pty.openpty + asyncio subprocess hsclaude).
+
+**Notes**:
+- Earlier session left `cmd_init` partially rewired (daemon_rpc block in place, emit still had `serveWindow`). Finished the emit update, then chained straight through setup/add/restart/stop/nuke.
+- `cmd_nuke` uses `autostart=False` on its `stop_serve` RPC and catches `DaemonNotRunning`: nuking when the daemon's already dead should not spin it back up just to tell it to SIGTERM a process it never owned.
+- One accidental co-commit: the uncommitted `SKILL.md` safety-rule edit (carried from master via session 1) rode along with the `cmd_status` routing commit. Not catastrophic — SKILL.md was going to get the same area rewritten the next commit anyway.
+- Dual-write to legacy `.serve.log` still happens inside the daemon's `_read_serve_stdout`; harmless now that nobody reads it, but left in for `cmd_logs` which still scrapes that file. Clean up when `cmd_logs` moves to `tail_serve` RPC (not on Phase 2's todo but easy to sneak in).
+
+
 **Notes**:
 - Master had uncommitted work carried forward onto this branch: `static_conf.json` package detection in `ws.py` + safety rules in `SKILL.md`. Left them uncommitted for now; `SKILL.md` gets rewritten in Phase 2 anyway, and `static_conf.json` is a reasonable improvement to fold into whatever serve-related Phase 2 commit touches package discovery.
 - Commit convention on this branch: no emoji, no `Co-Authored-By` footer (explicit override of global CLAUDE.md default). Prefix: `ws-daemon:` or `ws-tui:`.
