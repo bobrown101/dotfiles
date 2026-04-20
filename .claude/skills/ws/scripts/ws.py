@@ -1648,7 +1648,6 @@ def _compute_pkg_paths(name, setup_results):
 def cmd_init(args):
     name = normalize(args.name)
     parent = normalize(args.parent) if args.parent else None
-    tmux_session = f"{parent}/{name}" if parent else name
     prompt_file = pathlib.Path(f"/tmp/ws-{name}-init-prompt.txt")
     wsdir = ws_dir(name)
 
@@ -1656,6 +1655,7 @@ def cmd_init(args):
         emit_error(f"prompt file not found: {prompt_file}", recoverable=False)
         sys.exit(1)
 
+    prompt_text = prompt_file.read_text()
     wsdir.mkdir(parents=True, exist_ok=True)
 
     # If repos were specified, do the full setup BEFORE launching the workspace
@@ -1691,40 +1691,30 @@ def cmd_init(args):
         else:
             log("init: no packages to serve; skipping serve launch")
 
-    # Write launcher and launch workspace Claude via hsclaude (dvx wrapper)
-    # so its MCP servers (devex-mcp-server) are wired up correctly.
-    launcher = pathlib.Path(f"/tmp/ws-{name}-launch.sh")
-    launcher.write_text(
-        "#!/bin/bash\n"
-        f'PROMPT=$(cat "{prompt_file}")\n'
-        f'rm -f "{prompt_file}" "{launcher}"\n'
-        f'if command -v hsclaude >/dev/null 2>&1; then\n'
-        f'  exec hsclaude --name "{name}" "$PROMPT"\n'
-        f'else\n'
-        f'  exec claude --name "{name}" "$PROMPT"\n'
-        f'fi\n'
+    log(f"init: launching workspace claude via daemon...")
+    claude_resp = daemon_rpc(
+        "start_claude",
+        name=name,
+        prompt=prompt_text,
+        timeout=30.0,
     )
-    launcher.chmod(0o755)
-
-    if tmux_has_session(tmux_session):
-        emit({
-            "ok": True,
-            "workspace": name,
-            "tmuxSession": tmux_session,
-            "note": "tmux session already existed; launcher not re-run",
-            "setup": setup_results,
-        })
+    if not claude_resp.get("ok"):
+        emit_error(f"daemon start_claude failed: {claude_resp.get('error')}")
         return
 
-    tmux("new-session", "-d", "-s", tmux_session, "-n", name, "-c", str(wsdir))
-    tmux("send-keys", "-t", f"{tmux_session}:{name}", f"bash {launcher}", "Enter")
+    # Prompt file is single-use; unlink now that the daemon has a copy.
+    try:
+        prompt_file.unlink()
+    except FileNotFoundError:
+        pass
 
     emit({
         "ok": True,
         "workspace": name,
         "parent": parent,
-        "tmuxSession": tmux_session,
+        "claudePid": claude_resp.get("claudePid"),
         "workspaceDir": str(wsdir),
+        "attachCmd": f"ws.py attach-claude {name}",
         "setup": setup_results,
     })
 
@@ -2180,6 +2170,15 @@ def cmd_nuke(args):
     actions = []
 
     try:
+        claude_resp = daemon_rpc("stop_claude", name=name, autostart=False)
+        if claude_resp.get("ok"):
+            actions.append(f"daemon stop_claude: wasRunning={claude_resp.get('wasRunning')}")
+        else:
+            actions.append(f"daemon stop_claude failed: {claude_resp.get('error')}")
+    except DaemonNotRunning:
+        actions.append("daemon not running; skipped stop_claude")
+
+    try:
         stop_resp = daemon_rpc("stop_serve", name=name, autostart=False)
         if stop_resp.get("ok"):
             actions.append(f"daemon stop_serve: wasRunning={stop_resp.get('wasRunning')}")
@@ -2188,13 +2187,15 @@ def cmd_nuke(args):
     except DaemonNotRunning:
         actions.append("daemon not running; skipped stop_serve")
 
-    # Kill workspace session and any child sessions
+    # Clean up any lingering tmux sessions named after this workspace. Nothing
+    # new ever creates one (claude is under the daemon now), but older
+    # workspaces spun up before the daemon migration may still have them.
     sessions_result = tmux("list-sessions", "-F", "#{session_name}")
     sessions = sessions_result.stdout.split() if sessions_result.returncode == 0 else []
     for s in sessions:
         if s == name or s.startswith(f"{name}/") or s.endswith(f"/{name}"):
             tmux("kill-session", "-t", s)
-            actions.append(f"killed session {s}")
+            actions.append(f"killed legacy tmux session {s}")
 
     branches_deleted = []
     if args.delete_branches and wsdir.exists():
