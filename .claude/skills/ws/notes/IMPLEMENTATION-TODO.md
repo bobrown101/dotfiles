@@ -34,8 +34,8 @@ No emoji, no `Co-Authored-By` footer on this branch.
 - [x] Daemon RPC: `restart_serve`
 - [x] Daemon RPC: `status` (derive from ring buffer + process state)
 - [x] Daemon RPC: `list`
-- [ ] Daemon RPC: `tail_serve` (both follow and non-follow)
-- [ ] Daemon RPC: `remove_pkg`
+- [x] Daemon RPC: `tail_serve` (both follow and non-follow)
+- [x] Daemon RPC: `remove_pkg`
 - [x] MCP ordering: `start_serve` blocks until `~/.hubspot/route-configs/<pid>-introspection` appears (port `_wait_for_bend_registration`)
 - [ ] Rewire `cmd_init` / `cmd_setup` / `cmd_add` / `cmd_restart` / `cmd_stop` to call daemon
 - [ ] Delete `ServeDaemon` class, `_send_serve_command`, `SHARED_SERVE_SESSION`, `daemon_marker`

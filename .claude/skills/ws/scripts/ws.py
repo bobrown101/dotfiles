@@ -759,6 +759,7 @@ class Workspace:
     serve_packages: list = dataclasses.field(default_factory=list)
     serve_errors: list = dataclasses.field(default_factory=list)
     serve_bend_registered: bool = False
+    serve_tail_subscribers: set = dataclasses.field(default_factory=set)
 
 
 def _daemon_log_line(msg, **fields):
@@ -912,6 +913,80 @@ class WsDaemon:
             "state": ws.serve_state,
         }
 
+    async def _rpc_tail_serve(self, req, writer):
+        """Stream serve log. Ack JSON, then raw bytes until disconnect."""
+        name = normalize(req.get("name", ""))
+        ws = self.workspaces.get(name)
+        if ws is None:
+            return {"ok": False, "error": f"unknown workspace {name!r}"}
+        follow = bool(req.get("follow"))
+        tail_bytes = int(req.get("tailBytes") or SERVE_RING_BYTES)
+        await self._respond(writer, {
+            "ok": True,
+            "protocol": "log-stream",
+            "follow": follow,
+        })
+        snap = ws.serve_ring.snapshot()
+        if len(snap) > tail_bytes:
+            snap = snap[-tail_bytes:]
+        if snap:
+            writer.write(snap)
+            try:
+                await writer.drain()
+            except (ConnectionResetError, BrokenPipeError):
+                return None
+        if not follow:
+            return None
+        q = asyncio.Queue(maxsize=256)
+        ws.serve_tail_subscribers.add(q)
+        try:
+            while True:
+                chunk = await q.get()
+                if chunk is None:
+                    break
+                writer.write(chunk)
+                try:
+                    await writer.drain()
+                except (ConnectionResetError, BrokenPipeError):
+                    break
+        finally:
+            ws.serve_tail_subscribers.discard(q)
+        return None
+
+    async def _rpc_remove_pkg(self, req, writer):
+        name = normalize(req.get("name", ""))
+        ws = self.workspaces.get(name)
+        if ws is None:
+            return {"ok": False, "error": f"unknown workspace {name!r}"}
+        to_remove = {str(p) for p in (req.get("pkgs") or [])}
+        if not to_remove:
+            return {"ok": False, "error": "pkgs list is empty"}
+        # Match against either the full path or the final path component,
+        # so callers can say 'crm-cards' instead of the full absolute path.
+        def keep(p):
+            return str(p) not in to_remove and p.name not in to_remove
+        remaining = [p for p in ws.serve_pkg_paths if keep(p)]
+        if len(remaining) == len(ws.serve_pkg_paths):
+            return {
+                "ok": False,
+                "error": "no matching packages to remove",
+                "current": [str(p) for p in ws.serve_pkg_paths],
+            }
+        if not remaining:
+            return {
+                "ok": False,
+                "error": "removing these would leave zero packages; use stop_serve instead",
+            }
+        await self._stop_serve(ws)
+        ws.serve_pkg_paths = remaining
+        restart = await self._rpc_start_serve(
+            {"method": "start_serve", "name": name,
+             "pkgPaths": [str(p) for p in remaining]},
+            writer,
+        )
+        restart["remaining"] = [str(p) for p in remaining]
+        return restart
+
     async def _rpc_status(self, req, writer):
         name = normalize(req.get("name", ""))
         ws = self.workspaces.get(name)
@@ -1030,6 +1105,11 @@ class WsDaemon:
                         logf.flush()
                     except OSError:
                         pass
+                    for q in list(ws.serve_tail_subscribers):
+                        try:
+                            q.put_nowait(chunk)
+                        except asyncio.QueueFull:
+                            pass  # slow subscriber; drop
                     self._refresh_serve_state(ws)
         except Exception as exc:  # noqa: BLE001 — reader death is surfaced via state
             _daemon_log_line("serve stdout reader error", name=ws.name, error=str(exc))
@@ -1038,6 +1118,11 @@ class WsDaemon:
             _daemon_log_line("serve exited", name=ws.name, returncode=rc)
             if ws.serve_state not in ("error",):
                 ws.serve_state = "not_running"
+            for q in list(ws.serve_tail_subscribers):
+                try:
+                    q.put_nowait(None)  # sentinel → subscriber closes
+                except asyncio.QueueFull:
+                    pass
 
     def _refresh_serve_state(self, ws):
         text = ws.serve_ring.text()
