@@ -69,12 +69,12 @@ No emoji, no `Co-Authored-By` footer on this branch.
 
 ## Phase 5 — attach mode
 
-- [ ] **Decide**: embedded `PtyPane` widget vs stick with fullscreen suspend+attach (revisit after Phase 4 has been in daily use for a week)
-- [ ] (if embedded) Implement `PtyPane` — pyte integration, render loop, keybinding, resize
-- [ ] (if embedded) Gate behind `--experimental-pty` flag
-- [ ] (either) End-to-end: `<space> c` → attach → type → detach → return to sidebar
+- [x] **Decide**: fullscreen `app.suspend()` + shell-out wins for now. Embedded `PtyPane` designed but deferred — see `notes/PHASE-5-PTYPANE-DESIGN.md` for the future-session pickup.
+- [x] Fullscreen end-to-end: `<space> c` → `app.suspend()` → `ws.py attach-claude <name>` → `Ctrl-\` → return to sidebar. Lives in `ws_tui.py::_chord_attach`.
+- [ ] (deferred) Implement `PtyPane` — only if daily-use ergonomics surface a real complaint. Design doc unblocks the future session.
+- [ ] (deferred) Gate embedded pane behind `--experimental-pty` flag — same trigger.
 
 ## Decision items (non-coding)
 
-- [ ] **Phase-5 attach mode** — embedded vs fullscreen. Revisit end of Phase 3; pivot only if daily-use fullscreen experience warrants the complexity. See "Open tradeoff" section in the plan.
+- [x] **Phase-5 attach mode** — fullscreen suspend+attach chosen. Zero nested-redraw cost, ~10 LOC, reuses the daemon attach protocol unchanged. Embedded `PtyPane` documented in `notes/PHASE-5-PTYPANE-DESIGN.md`; revisit only if daily use produces a real ergonomic complaint.
 - [ ] **Alias `ws.py serve-daemon ls`** to `ws.py list` — yes/no? Add only if it'd get used.
