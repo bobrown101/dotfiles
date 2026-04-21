@@ -151,6 +151,8 @@ If the log-check returns hits, surface them with the "Setup failed" template. Ot
 
 If the user later asks to add another repo, use `ws.py add <name> <repo>:<branch>` (idempotent; stops and restarts serve with the combined package list). If you're resuming a workspace whose repos are already cloned but serve is down, use `ws.py setup <name>`.
 
+`setup`'s JSON output includes `skippedRepos: [{repo, reason}...]`. If it's non-empty, list the entries and ask the user to confirm before continuing — `setup` skips repos it can't resolve a remote for rather than hard-failing, so a surprise skip can mean a missing `~/src/<repo>` clone.
+
 ## Validating code with bend MCP tools
 
 Serve is launched with `--enable-tools --ts-watch --run-tests`, so bend MCP tools are usable for compile, TS diagnostics, and tests.
