@@ -44,17 +44,17 @@ No emoji, no `Co-Authored-By` footer on this branch.
 
 ## Phase 3 — daemon owns Claude
 
-- [x] Daemon RPC: `start_claude` (`pty.openpty` + asyncio subprocess `hsclaude`, close slave in daemon, drain master fd into ring buffer)
-- [x] Daemon RPC: `stop_claude` (SIGTERM pgroup → 5s → SIGKILL)
-- [x] Daemon RPC: `attach_claude` (ack JSON → switch socket to raw bytes, replay ring buffer, fan-out)
-- [x] Daemon RPC: `resize_claude`
-- [x] New CLI `ws.py attach-claude` (terminal raw mode, stdin ↔ socket proxy, `Ctrl-\` local detach, SIGWINCH → resize_claude)
-- [x] `cmd_init` stops creating tmux session; issues `start_claude` RPC
-- [x] Remove `/tmp/ws-<name>-launch.sh` generation
-- [x] Rewrite `cmd_nuke` Claude-teardown path
-- [x] Update `SKILL.md` — "switch to tmux session" → "run `ws.py attach-claude`"
-- [x] Update `ARCHITECTURE.md` — replaced tmux row with ws-daemon row; redrew sequence-full + sequence-add diagrams around daemon RPCs.
-- [x] Daemon-level smoke test: start_claude → resize_claude → stop_claude clean. Full attach/detach/re-attach e2e deferred until next real workspace init on this branch (needs a real tty).
+- [ ] Daemon RPC: `start_claude` (`pty.openpty` + asyncio subprocess `hsclaude`, close slave in daemon, attach pyte stream reader)
+- [ ] Daemon RPC: `stop_claude`
+- [ ] Daemon RPC: `attach_claude` (ack JSON → switch socket to raw bytes, replay ring buffer, fan-out)
+- [ ] Daemon RPC: `resize_claude`
+- [ ] New CLI `ws.py attach-claude` (terminal raw mode, stdin ↔ socket proxy, `Ctrl-\` local detach)
+- [ ] `cmd_init` stops creating tmux session; issues `start_claude` RPC
+- [ ] Remove `/tmp/ws-<name>-launch.sh` generation
+- [ ] Rewrite `cmd_nuke` Claude-teardown path
+- [ ] Update `SKILL.md` — "switch to tmux session" → "run `ws.py attach-claude`"
+- [ ] Update `ARCHITECTURE.md` — replace tmux row with daemon row; redraw sequence diagram
+- [ ] End-to-end test: attach, detach, re-attach, nuke
 
 ## Phase 4 — TUI MVP (no embedded PTY)
 

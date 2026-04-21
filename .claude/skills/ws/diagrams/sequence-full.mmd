@@ -1,11 +1,11 @@
 sequenceDiagram
     actor User as 👤 User
     actor Creator as 🤖 Creator Claude
-    participant WS as 🐍 ws.py (client)
-    participant D as 🛰️ ws-daemon
+    participant WS as 🐍 ws.py
     participant FS as 📂 Filesystem
+    participant Tmux as 🪟 tmux
     participant Bend as 🏗️ bend serve
-    participant HSC as 🧰 hsclaude (PTY)
+    participant HSC as 🧰 hsclaude
     actor WsC as 🤖 Workspace Claude
     participant MCP as 🔌 devex-mcp-server
 
@@ -24,38 +24,31 @@ sequenceDiagram
     rect rgb(255, 243, 205)
         Note over WS,Bend: Setup phase — blocks ~2–4 min
         WS->>FS: mkdir workspaces/<name>/
+        WS->>Tmux: open workspaces-serve-commands:<name>
         par clone + yarn in parallel
             WS->>FS: git clone <repo>
             WS->>FS: bend yarn
         end
         WS->>FS: discover packages, update discovery cache
-        WS->>D: start_serve RPC (auto-starts daemon if missing)
-        D->>Bend: spawn bend reactor serve --enable-tools --ts-watch --run-tests
+        WS->>Tmux: send-keys "ws.py serve-daemon <name> <pkgs>"
+        Tmux->>Bend: bend reactor serve --enable-tools --ts-watch --run-tests
         Bend->>FS: write route-configs/<pid>-introspection
-        loop ≤ 120s until NEW introspection filename appears (snapshot diff)
-            D->>FS: stat route-configs/*
+        loop ≤ 120s until fresh introspection appears
+            WS->>FS: stat route-configs/*
         end
-        D-->>WS: {ok, servePid, bendRegistered:true}
         Note right of WS: bend is registered — safe to spawn the Workspace Claude
     end
 
-    WS->>D: start_claude RPC (prompt text)
-    D->>HSC: pty.openpty + subprocess hsclaude --name <name> "<handoff prompt>"
+    WS->>FS: write /tmp/ws-<name>-launch.sh
+    WS->>Tmux: create workspace session, send-keys launcher
+    Tmux->>HSC: hsclaude --name <name> "<handoff prompt>"
     HSC->>WsC: exec claude (with MCP config wired up)
     WsC->>MCP: spawn devex-mcp-server subprocess
     MCP->>FS: scan ~/.hubspot/route-configs/ at startup
     FS-->>MCP: <pid>-introspection (fresh)
     MCP-->>WsC: register bend_* as deferred tools
-    D-->>WS: {ok, claudePid}
-    WS-->>Creator: init JSON (attachCmd, setup results)
-    Creator->>User: "run ws.py attach-claude <name>"
-
-    User->>WS: attach-claude <name>
-    WS->>D: attach_claude RPC (cols, rows)
-    D-->>WS: ack {protocol:"pty-stream"} + replay ring buffer
-    Note over WS,D: socket switches to raw bytes both directions
-    WS->>WsC: keystrokes (via daemon master_fd)
-    WsC-->>WS: PTY output (via daemon ring + fan-out)
+    WS-->>Creator: init JSON (tmuxSession, setup results)
+    Creator->>User: "switch to tmux session <name>"
 
     Note over WsC: First action after handoff
     WsC->>WS: wait-ready <name>
@@ -75,10 +68,9 @@ sequenceDiagram
     Note over User,WsC: Teardown
     User->>WsC: nuke this workspace
     WsC->>WS: nuke <name>
-    WS->>D: stop_claude RPC
-    D->>HSC: killpg SIGTERM → SIGKILL
-    WS->>D: stop_serve RPC
-    D->>Bend: killpg SIGTERM → SIGKILL
+    WS->>Bend: SIGTERM via pgrep -f "ws.py serve-daemon <name>"
+    Bend-->>WS: cleanup (signal trap kills bend tree)
+    WS->>Tmux: kill workspace session + serve window
     WS->>FS: rm -rf workspaces/<name>/
     WS-->>WsC: done
     WsC->>User: workspace gone
