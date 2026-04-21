@@ -901,31 +901,37 @@ class WsDaemon:
                 "bendRegistered": False,
             }
         serve_up = ws.serve_proc is not None and ws.serve_proc.returncode is None
+        claude_up = ws.claude_proc is not None and ws.claude_proc.returncode is None
         return {
             "ok": True,
             "workspace": name,
             "state": ws.serve_state,
             "serveUp": serve_up,
-            "claudeUp": False,  # Phase 3 populates this
+            "claudeUp": claude_up,
             "servePid": ws.serve_proc.pid if serve_up else None,
+            "claudePid": ws.claude_proc.pid if claude_up else None,
             "packages": ws.serve_packages,
             "errors": ws.serve_errors,
             "urls": _derive_urls_for(name),
             "pkgPaths": [str(p) for p in ws.serve_pkg_paths],
             "bendRegistered": ws.serve_bend_registered,
+            "attachedClients": len(ws.claude_attach_subscribers),
         }
 
     async def _rpc_list(self, req, writer):
         items = []
         for name, ws in sorted(self.workspaces.items()):
             serve_up = ws.serve_proc is not None and ws.serve_proc.returncode is None
+            claude_up = ws.claude_proc is not None and ws.claude_proc.returncode is None
             items.append({
                 "name": name,
                 "state": ws.serve_state,
                 "serveUp": serve_up,
-                "claudeUp": False,  # Phase 3 populates
+                "claudeUp": claude_up,
                 "servePid": ws.serve_proc.pid if serve_up else None,
+                "claudePid": ws.claude_proc.pid if claude_up else None,
                 "pkgCount": len(ws.serve_pkg_paths),
+                "attachedClients": len(ws.claude_attach_subscribers),
             })
         return {"ok": True, "workspaces": items}
 
