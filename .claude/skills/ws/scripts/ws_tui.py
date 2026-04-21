@@ -407,15 +407,9 @@ class WsTuiApp(App):
         self.refresh_list()
 
     def _chord_attach(self, name: str) -> None:
-        """Fullscreen shell-out to ws.py attach-claude.
-
-        Textual's app.suspend() restores the alternate screen + raw-mode state
-        on exit from the with-block, so we just shell out inside it. claude
-        keeps running in ws-daemon regardless of how the subprocess exits —
-        Ctrl-\\ detaches cleanly, SIGINT/SIGTERM on the CLI also only closes
-        the proxy. See notes/PHASE-5-PTYPANE-DESIGN.md for what an embedded
-        alternative to this fullscreen path would look like.
-        """
+        """Fullscreen shell-out to ws.py attach-claude. app.suspend restores the
+        TUI when the subprocess exits (either claude stopped or the user hit
+        Ctrl-\\)."""
         if not WS_PY.exists():
             self.notify(f"ws.py missing at {WS_PY}", severity="error")
             return
@@ -424,6 +418,7 @@ class WsTuiApp(App):
             self.notify("`uv` not in PATH — can't shell out to ws.py", severity="error")
             return
         with self.suspend():
+            os.system(f"clear")
             subprocess.run([uv_bin, "run", str(WS_PY), "attach-claude", name])
 
     @work(exclusive=True, group="chord")
