@@ -58,14 +58,14 @@ No emoji, no `Co-Authored-By` footer on this branch.
 
 ## Phase 4 — TUI MVP (no embedded PTY)
 
-- [x] `ws_tui.py` PEP 723 header + skeleton (Textual, watchfiles — pyte only pulled in if/when Phase 5 lands embedded PtyPane)
-- [x] Sidebar `DataTable` fed by `list` RPC, refreshed by `watchfiles` + 2s timer
-- [x] Serve-log tab streaming `tail_serve`
-- [x] Status tab rendering `status` JSON
-- [x] Vim-style keybindings with space leader (j/k/h/l, `<space>` + letter: r/s/c/u/q)
-- [ ] Modals: add, remove, nuke-confirm, logs, grep, URL picker — deferred; URL picker works today as a toast notification, the rest are one screen each and can be added as daily-use demands
-- [x] Claude tab placeholder — "press `<space> c` to attach (fullscreen)"
-- [x] Shell-out to `ws.py attach-claude` via `app.suspend()` for the placeholder
+- [ ] `ws_tui.py` PEP 723 header + skeleton (Textual, pyte pinned, watchfiles)
+- [ ] Sidebar `DataTable` fed by `list` RPC, refreshed by `watchfiles` + 2s timer
+- [ ] Serve-log tab streaming `tail_serve`
+- [ ] Status tab rendering `status` JSON
+- [ ] Vim-style keybindings with space leader (j/k/h/l, `<space>` + letter)
+- [ ] Modals: add, remove, nuke-confirm, logs, grep, URL picker
+- [ ] Claude tab placeholder — "press `<space> c` to attach (fullscreen)"
+- [ ] Shell-out to `ws.py attach-claude` via `app.suspend()` for the placeholder
 
 ## Phase 5 — attach mode
 
