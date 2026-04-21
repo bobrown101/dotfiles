@@ -1,12 +1,12 @@
 ---
 name: ws
-description: Manage parallel multi-repo development workspaces using git worktrees, ws-daemon, and bend serve. Use when the user wants to create, update, tear down, or inspect workspaces, or mentions workspaces, worktrees, or parallel dev environments.
+description: Manage parallel multi-repo development workspaces using git worktrees, tmux, and bend serve. Use when the user wants to create, update, tear down, or inspect workspaces, or mentions workspaces, worktrees, or parallel dev environments.
 argument-hint: "up <name> <repo[:branch]...>"
 ---
 
 # Workspace Manager
 
-Manage isolated multi-repo development workspaces. Each workspace gets its own git clones and its own `bend serve` instance (with a unique subdomain). A single long-lived `ws-daemon` owns every serve and every workspace Claude PTY; clients attach to Claude via `ws.py attach-claude <name>`.
+Manage isolated multi-repo development workspaces. Each workspace gets its own git clones and its own `bend serve` instance (with a unique subdomain). A single long-lived `ws-daemon` owns every serve; the workspace Claude still runs in its own tmux session (for now — Phase 3 moves Claude under the daemon too).
 
 See `ARCHITECTURE.md` in this dir for the full component map and a sequence diagram of the create → work → teardown flow. This file is the operating manual; that one is the map.
 
@@ -20,7 +20,7 @@ Invoke every subcommand via `uv run {{SKILL_PATH}}/scripts/ws.py <command>`. Eve
 
 Two Claude instances are involved:
 - **Creator**: the Claude instance where the user asks for a workspace. Reads this file, runs `ws.py plan`, shows the plan, writes the handoff prompt, runs `ws.py init`. Done.
-- **Workspace Claude**: runs under ws-daemon, attached via `ws.py attach-claude <name>`. Reads the handoff prompt (Section 3 below). Runs `ws.py setup`, reports to the user.
+- **Workspace Claude**: runs inside the workspace tmux session. Reads the handoff prompt (Section 3 below). Runs `ws.py setup`, reports to the user.
 
 ---
 
@@ -40,9 +40,9 @@ Two Claude instances are involved:
 - **Source repos** (for remote resolution): `~/src/<repo>/`
 - **Branch default**: `brbrown/<workspace-name>` (override per-repo with `repo:branch` syntax)
 - **Portal ID**: `103830646`
-- **User shell**: fish. `ws.py` handles quoting when building shell pipelines — don't construct them by hand.
+- **Shell in tmux windows**: fish. `ws.py` handles quoting — don't construct shell pipelines by hand.
 - **Discovery cache**: `~/src/workspaces/workspace-discovery-cache.json` — `ws.py` reads and writes this automatically.
-- **Parent/child workspaces**: `ws.py init --parent <name>` records the parent relationship on the init JSON output; useful when spawning a child workspace from inside another.
+- **Parent/child workspaces**: when spawned from inside another workspace, the tmux session is named `<parent>/<child>` so it groups in tmux's session picker. `ws.py init --parent <name>` handles it.
 - **No metadata files** — the filesystem IS the state.
 
 ---
@@ -80,13 +80,13 @@ If repos are given in natural language (e.g. "Customer Data Table"), match again
      --repos <repo1>:<branch1> <repo2>:<branch2> ...
    ```
 
-5. **Tell the user** the attach command from the `attachCmd` field of init's JSON output (e.g. `ws.py attach-claude <name>`). `Ctrl-\` detaches; Claude keeps running inside ws-daemon. Done.
+5. **Tell the user** the tmux session name to switch to (from the `tmuxSession` field of init's JSON output). Done.
 
 ## Adding repos to an existing workspace
 
 `/ws up <name> <new-repo>...` when the workspace already exists (plan output has `existing: true`):
 
-Tell the user to attach to the workspace Claude via `ws.py attach-claude <name>` and ask it to run `ws.py add <name> <new-repo>...`. The creator does NOT do this work.
+Tell the user to switch to the workspace tmux session and ask the workspace Claude to run `ws.py add <name> <new-repo>...`. The creator does NOT do this work.
 
 ## Building the handoff prompt
 
