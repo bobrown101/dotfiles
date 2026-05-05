@@ -130,11 +130,42 @@ vim.api.nvim_create_autocmd("FileType", {
     callback = function() pcall(vim.treesitter.start) end,
 })
 
-vim.o.completeopt = "menu,menuone,noselect,fuzzy,popup"
+-- noinsert: auto-highlights the first item in the menu (so hover fires immediately)
+-- but doesn't insert its text until confirmed. noselect would require a manual
+-- Tab press before anything is highlighted. fuzzy enables fuzzy matching.
+-- popup is here but unused in practice — the hover doc below supersedes it.
+vim.o.completeopt = "menu,menuone,noinsert,fuzzy,popup"
+
+-- Replace the text kind labels (e.g. "Property") with Nerd Font icons.
+-- vim.lsp.protocol.CompletionItemKind is a bidirectional map:
+--   ["Method"] = 2  and  [2] = "Method"
+-- Neovim reads the numeric->string direction when rendering the kind column,
+-- so overwriting those entries is all that's needed — no plugin required.
+do
+    local icons = {
+        Text = "󰉿", Method = "󰆧", Function = "󰊕", Constructor = "",
+        Field = "󰜢", Variable = "󰀫", Class = "󰠱", Interface = "",
+        Module = "", Property = "󰜢", Unit = "󰑭", Value = "󰎠",
+        Enum = "", Keyword = "󰌋", Snippet = "", Color = "󰏘",
+        File = "󰈙", Reference = "󰈇", Folder = "󰉋", EnumMember = "",
+        Constant = "󰏿", Struct = "󰙅", Event = "", Operator = "󰆕",
+        TypeParameter = "",
+    }
+    for kind, icon in pairs(icons) do
+        local idx = vim.lsp.protocol.CompletionItemKind[kind]
+        if idx then
+            vim.lsp.protocol.CompletionItemKind[idx] = icon
+        end
+    end
+end
+
 vim.diagnostic.config({
     severity_sort = true,
     virtual_text = { prefix = "●" },
 })
+
+-- Neovim 0.11 native LSP completion — replaces the old nvim-cmp stack.
+-- autotrigger fires completion automatically as you type (no manual invoke needed).
 vim.api.nvim_create_autocmd("LspAttach", {
     callback = function(ev)
         local client = vim.lsp.get_client_by_id(ev.data.client_id)
@@ -147,12 +178,78 @@ vim.api.nvim_create_autocmd("LspAttach", {
         end
     end,
 })
+
+-- Tab/S-Tab navigate the completion menu; fall through to literal tab otherwise.
+-- <C-Space> manually triggers completion via omnifunc (<C-x><C-o>).
 vim.keymap.set("i", "<Tab>", function()
     return vim.fn.pumvisible() == 1 and "<C-n>" or "<Tab>"
 end, { expr = true })
 vim.keymap.set("i", "<S-Tab>", function()
     return vim.fn.pumvisible() == 1 and "<C-p>" or "<S-Tab>"
 end, { expr = true })
+vim.keymap.set("i", "<C-Space>", "<C-x><C-o>")
+
+-- Hover doc alongside the completion menu.
+--
+-- The native completion popup only shows the item's `info` field, which LSP leaves
+-- empty until a completionItem/resolve round-trip. Rather than wiring up resolve,
+-- we fire a full textDocument/hover request on every selection change — this is the
+-- same data K shows in normal mode.
+--
+-- Two-step render: open_floating_preview handles markdown/treesitter highlighting,
+-- then nvim_win_set_config repositions the window to sit right of the pum.
+-- We can't pass absolute row/col through vim.lsp.buf.hover() because the lsp utility
+-- treats them as cursor-relative offsets, not editor-absolute coordinates.
+--
+-- The augroup (clear=true) ensures :source $MYVIMRC doesn't register duplicate autocmds.
+local _hover_win = nil
+local _hover_aug = vim.api.nvim_create_augroup("CompletionHover", { clear = true })
+vim.api.nvim_create_autocmd("CompleteChanged", {
+    group = _hover_aug,
+    callback = function()
+        local item = vim.v.completed_item
+        if type(item) ~= "table" or (item.word or "") == "" then return end
+        -- capture pum position synchronously before the async LSP request,
+        -- since the pum may move or close by the time the response arrives
+        local pum = vim.fn.pum_getpos()
+        if vim.tbl_isempty(pum) then return end
+        local bufnr = vim.api.nvim_get_current_buf()
+        local params = vim.lsp.util.make_position_params()
+        vim.lsp.buf_request(bufnr, "textDocument/hover", params, function(err, result)
+            if _hover_win and vim.api.nvim_win_is_valid(_hover_win) then
+                vim.api.nvim_win_close(_hover_win, true)
+                _hover_win = nil
+            end
+            if err or not result or not result.contents then return end
+            local lines = vim.lsp.util.convert_input_to_markdown_lines(result.contents)
+            lines = vim.lsp.util.trim_empty_lines(lines)
+            if not lines or #lines == 0 then return end
+            local _, fwin = vim.lsp.util.open_floating_preview(lines, "markdown", {
+                border = "rounded",
+                focusable = false,
+                max_width = 60,
+            })
+            _hover_win = fwin
+            -- pum.col + pum.width lands at the right edge; +1 more if scrollbar is shown
+            local col = pum.col + pum.width + (pum.scrollbar == 1 and 1 or 0)
+            vim.api.nvim_win_set_config(fwin, {
+                relative = "editor",
+                anchor = "NW",
+                row = pum.row,
+                col = col,
+            })
+        end)
+    end,
+})
+vim.api.nvim_create_autocmd("CompleteDone", {
+    group = _hover_aug,
+    callback = function()
+        if _hover_win and vim.api.nvim_win_is_valid(_hover_win) then
+            vim.api.nvim_win_close(_hover_win, true)
+            _hover_win = nil
+        end
+    end,
+})
 
 require("lualine").setup({
     options = {
