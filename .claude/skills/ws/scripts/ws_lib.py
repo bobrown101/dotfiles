@@ -1,8 +1,8 @@
 """ws_lib — shared helpers for the workspace manager.
 
-Pure stdlib. No daemon state, no CLI dispatch. Imported by ws.py and
-ws_daemon.py. Lives next to ws.py so `Path(__file__).parent` resolves
-to the `scripts/` dir and `.parent.parent` to the skill root.
+Pure stdlib. No process supervision, no CLI dispatch. Imported by ws.py
+and ws_supervise.py. Lives next to ws.py so `Path(__file__).parent`
+resolves to the `scripts/` dir and `.parent.parent` to the skill root.
 """
 
 import concurrent.futures  # noqa: F401 — re-exported for callers that need it
@@ -23,6 +23,7 @@ HOME = pathlib.Path.home()
 SRC_ROOT = HOME / "src"
 WS_ROOT = SRC_ROOT / "workspaces"
 DISCOVERY_CACHE_PATH = WS_ROOT / "workspace-discovery-cache.json"
+WS_PREFERENCES_PATH = WS_ROOT / "ws-preferences.json"
 ROUTE_CONFIGS_DIR = HOME / ".hubspot" / "route-configs"
 SERVE_LOG_NAME = ".serve.log"
 PORTAL_ID = "103830646"
@@ -30,15 +31,6 @@ DEFAULT_ORG = "HubSpot"
 DEFAULT_BRANCH_PREFIX = "brbrown/"
 LOG_TAIL_BYTES = 50_000
 
-# ws-daemon (single long-lived process; owns workspace state in memory).
-WS_DAEMON_SOCKET = HOME / ".ws-daemon.sock"
-WS_DAEMON_LOG = HOME / ".ws-daemon.log"
-WS_DAEMON_LOG_MAX_BYTES = 10 * 1024 * 1024  # 10 MiB per file
-WS_DAEMON_LOG_BACKUPS = 3
-WS_DAEMON_STATE = HOME / ".ws-daemon.state.json"
-WS_DAEMON_START_TIMEOUT_S = 10.0
-WS_DAEMON_STOP_TIMEOUT_S = 30.0
-SERVE_RING_BYTES = 256 * 1024
 BEND_REGISTRATION_TIMEOUT_S = 120.0
 SERVE_STOP_GRACE_S = 15.0
 
@@ -57,9 +49,7 @@ EXCLUDE_SUBDIR_SUBSTRS = (
     "hubspot.deploy", "docs", "acceptance-tests",
 )
 
-# Resolve paths relative to this file so daemon fork knows where ws.py lives.
 _THIS_DIR = pathlib.Path(__file__).resolve().parent  # .../skills/ws/scripts
-WS_SCRIPT_PATH = _THIS_DIR / "ws.py"
 WS_SKILL_ROOT = _THIS_DIR.parent  # .../skills/ws
 
 BEND_MCP_TOOLS = [
@@ -205,6 +195,41 @@ def update_discovery_cache(repo, fields):
         save_discovery_cache(cache)
 
 
+# ---------------------------------------------------------------- Preferences
+
+def load_preferences():
+    """Load ws-preferences.json. Returns {} if missing or malformed."""
+    if not WS_PREFERENCES_PATH.exists():
+        return {}
+    try:
+        return json.loads(WS_PREFERENCES_PATH.read_text())
+    except json.JSONDecodeError:
+        log("WARN: ws-preferences.json malformed; ignoring")
+        return {}
+
+
+def save_preferences(prefs):
+    WS_PREFERENCES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = WS_PREFERENCES_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(prefs, indent=2, sort_keys=True))
+    tmp.replace(WS_PREFERENCES_PATH)
+
+
+def node_memory_for_repos(repo_names, prefs=None):
+    """Return the highest nodeMemory (MB) required by any repo in repo_names.
+
+    Falls back to 4096 if no preference is set. Callers can pass a
+    pre-loaded prefs dict to avoid redundant file reads.
+    """
+    if prefs is None:
+        prefs = load_preferences()
+    repo_prefs = prefs.get("repos", {})
+    return max(
+        (repo_prefs.get(r, {}).get("nodeMemory", 4096) for r in repo_names),
+        default=4096,
+    )
+
+
 # ---------------------------------------------------------------- Git / repo resolution
 
 GITHUB_REMOTE_RE = re.compile(r"[:/]([^/]+)/([^/.]+?)(?:\.git)?$")
@@ -233,19 +258,6 @@ def parse_repo_arg(arg, default_branch):
     else:
         repo, branch = arg, default_branch
     return repo.strip(), branch.strip()
-
-
-def detect_parent_workspace():
-    """Detect if we're inside another workspace (cwd under ~/src/workspaces/X/)."""
-    cwd = pathlib.Path.cwd().resolve()
-    try:
-        rel = cwd.relative_to(WS_ROOT)
-    except ValueError:
-        return None
-    parts = rel.parts
-    if not parts:
-        return None
-    return parts[0]
 
 
 def current_branch(path):
@@ -573,7 +585,7 @@ def parse_serve_log(text):
 #   - skills/ws → symlink to this skill (so the workspace Claude loads it
 #     natively instead of relying on a ~10 KB handoff prompt paste).
 #   - settings.local.json → denies direct kill/bend-serve bash patterns so
-#     workspace Claude can't stomp on daemon-owned serve processes.
+#     workspace Claude can't stomp on the supervised serve process.
 #   - CLAUDE.md → one-line first-action: warm the bend MCP tool schemas.
 
 def _provision_workspace_claude_dir(wsdir):
@@ -630,7 +642,7 @@ def _provision_workspace_claude_dir(wsdir):
             "session so the bend tool schemas are loaded up front instead of\n"
             "dehoisted lazily on first use.\n\n"
             "## Serve ownership\n"
-            "The workspace's `bend reactor serve` is owned by ws-daemon. Do not\n"
+            "The workspace's `bend reactor serve` is supervised by ws.py. Do not\n"
             "start or stop it directly — use `ws.py status/logs/wait-ready/urls`.\n"
         )
 

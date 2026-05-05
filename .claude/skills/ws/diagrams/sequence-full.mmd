@@ -24,14 +24,13 @@ sequenceDiagram
     rect rgb(255, 243, 205)
         Note over WS,Bend: Setup phase — blocks ~2–4 min
         WS->>FS: mkdir workspaces/<name>/
-        WS->>Tmux: open workspaces-serve-commands:<name>
         par clone + yarn in parallel
             WS->>FS: git clone <repo>
             WS->>FS: bend yarn
         end
         WS->>FS: discover packages, update discovery cache
-        WS->>Tmux: send-keys "ws.py serve-daemon <name> <pkgs>"
-        Tmux->>Bend: bend reactor serve --enable-tools --ts-watch --run-tests
+        WS->>Bend: Popen(bend reactor serve ..., start_new_session=True)
+        WS->>FS: write <ws_dir>/.ws-serve.json (pid, lstart, marker, pkgPaths)
         Bend->>FS: write route-configs/<pid>-introspection
         loop ≤ 120s until fresh introspection appears
             WS->>FS: stat route-configs/*
@@ -68,9 +67,9 @@ sequenceDiagram
     Note over User,WsC: Teardown
     User->>WsC: nuke this workspace
     WsC->>WS: nuke <name>
-    WS->>Bend: SIGTERM via pgrep -f "ws.py serve-daemon <name>"
-    Bend-->>WS: cleanup (signal trap kills bend tree)
-    WS->>Tmux: kill workspace session + serve window
+    WS->>FS: read <ws_dir>/.ws-serve.json → (pid, lstart)
+    WS->>Bend: os.killpg(getpgid(pid), SIGTERM) then SIGKILL after 15s
+    WS->>Tmux: kill workspace session
     WS->>FS: rm -rf workspaces/<name>/
     WS-->>WsC: done
     WsC->>User: workspace gone

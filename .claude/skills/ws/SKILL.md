@@ -6,7 +6,7 @@ argument-hint: "up <name> <repo[:branch]...>"
 
 # Workspace Manager
 
-Manage isolated multi-repo development workspaces. Each workspace gets its own git clones and its own `bend serve` instance (with a unique subdomain). A single long-lived `ws-daemon` owns every serve; the workspace Claude still runs in its own tmux session (for now — Phase 3 moves Claude under the daemon too).
+Manage isolated multi-repo development workspaces. Each workspace gets its own git clones and its own `bend serve` instance (with a unique subdomain). Each serve runs as a detached process group supervised by `ws.py` (state lives on disk in `<ws_dir>/.ws-serve.json`); the workspace Claude runs in its own tmux session.
 
 See `ARCHITECTURE.md` in this dir for the full component map and a sequence diagram of the create → work → teardown flow. This file is the operating manual; that one is the map.
 
@@ -28,10 +28,10 @@ Two Claude instances are involved:
 
 ## Critical safety rules
 
-- **NEVER use `pkill -f` with the workspace name or workspace path.** This WILL match and kill the Claude process itself. Use `ws.py stop` instead — it asks the ws-daemon to signal bend over RPC.
+- **NEVER use `pkill -f` with the workspace name or workspace path.** This WILL match and kill the Claude process itself. Use `ws.py stop` instead — it sends SIGTERM to the serve process group and cleans up state.
 - **NEVER delete git branches** unless the user explicitly asks. Only `ws.py nuke --delete-branches` does this, and the creator should confirm with the user first.
 - **NEVER do setup work from the creator.** After `ws.py init` launches the workspace Claude, the creator is done.
-- **NEVER hand-manage the bend serve process.** Do not `kill` the serve PID, do not spawn `bend reactor serve …` yourself, do not reconstruct a `bend reactor serve` command from `ps` output. Every serve lifecycle operation — start, stop, restart, adding a package — goes through `ws.py` (which talks to the ws-daemon). Hand-rolled restarts drop registration in `~/.hubspot/route-configs/` (so `serveUp` flips false in status), and reconstructed commands silently miss the `--env bend-instance=<name>` / `--env local-static-domain=<name>.local.hsappstatic.net` flags — the instance URL then stops resolving or, worse, serves a different workspace's packages. If you think you need to touch serve directly, you don't; use `ws.py restart <name>` (or `stop` / `add`) instead.
+- **NEVER hand-manage the bend serve process.** Do not `kill` the serve PID, do not spawn `bend reactor serve …` yourself, do not reconstruct a `bend reactor serve` command from `ps` output. Every serve lifecycle operation — start, stop, restart, adding a package — goes through `ws.py`. Hand-rolled restarts drop registration in `~/.hubspot/route-configs/` (so `serveUp` flips false in status), and reconstructed commands silently miss the env flags (`BEND_WORKTREE=<name>` / `WS_SUPERVISE_MARKER`) — the instance URL then stops resolving or, worse, serves a different workspace's packages. If you think you need to touch serve directly, you don't; use `ws.py restart <name>` (or `stop` / `add`) instead.
 
 ## Conventions
 
@@ -42,7 +42,6 @@ Two Claude instances are involved:
 - **Portal ID**: `103830646`
 - **Shell in tmux windows**: fish. `ws.py` handles quoting — don't construct shell pipelines by hand.
 - **Discovery cache**: `~/src/workspaces/workspace-discovery-cache.json` — `ws.py` reads and writes this automatically.
-- **Parent/child workspaces**: when spawned from inside another workspace, the tmux session is named `<parent>/<child>` so it groups in tmux's session picker. `ws.py init --parent <name>` handles it.
 - **No metadata files** — the filesystem IS the state.
 
 ---
@@ -68,7 +67,7 @@ If repos are given in natural language (e.g. "Customer Data Table"), match again
    ```
    uv run {{SKILL_PATH}}/scripts/ws.py plan <name> <repo1> <repo2:branch>...
    ```
-   The JSON output tells you: normalized workspace name, detected parent (if cwd is under another workspace), resolved remotes, branches, and any unresolved repos. If `ok: false`, show the `missingRepos` and stop — don't proceed.
+   The JSON output tells you: normalized workspace name, resolved remotes, branches, and any unresolved repos. If `ok: false`, show the `missingRepos` and stop — don't proceed.
 
 2. **Briefly state what you're doing** (one line — workspace name + repos). Don't wait for approval; proceed straight to step 3. Tell the user up front that init will take a few minutes; they can tail bend output with `ws.py logs <name> --tail 200` while they wait.
 
@@ -76,11 +75,38 @@ If repos are given in natural language (e.g. "Customer Data Table"), match again
 
 4. **Run `ws.py init` with the repo list** — this blocks for ~2–4 min doing the full setup (clone, yarn, serve) BEFORE launching the workspace Claude, so its MCP server finds bend registered in `~/.hubspot/route-configs/` at startup:
    ```
-   uv run {{SKILL_PATH}}/scripts/ws.py init <name> [--parent <parent>] \
+   uv run {{SKILL_PATH}}/scripts/ws.py init <name> \
      --repos <repo1>:<branch1> <repo2>:<branch2> ...
    ```
+   Node memory is set automatically from `ws-preferences.json` (per-repo `nodeMemory`). The default is **4096 MB**; known memory-hungry repos like crm-index-ui use their stored preference. Pass `--node-memory <MB>` to override for this run only. Running multiple concurrent workspaces with 8192+ MB each is what causes the 100 GB+ Node memory OOM.
+
+## Per-repo memory preferences (`ws-preferences.json`)
+
+`~/src/workspaces/ws-preferences.json` stores user-authored per-repo settings. `ws.py` reads it automatically when starting serve — no flags needed once a repo is registered.
+
+Set a repo's memory requirement once:
+```
+uv run {{SKILL_PATH}}/scripts/ws.py prefs set-repo-memory crm-index-ui 16384
+```
+
+Read current preferences:
+```
+uv run {{SKILL_PATH}}/scripts/ws.py prefs get
+```
+
+Schema:
+```json
+{
+  "repos": {
+    "crm-index-ui": { "nodeMemory": 16384 },
+    "crm-index-data-lib": { "nodeMemory": 16384 }
+  }
+}
+```
 
 5. **Tell the user** the tmux session name to switch to (from the `tmuxSession` field of init's JSON output). Done.
+
+---
 
 ## Adding repos to an existing workspace
 
@@ -94,8 +120,6 @@ Write the handoff prompt to `/tmp/ws-<name>-init-prompt.txt` using the Write too
 
 ```
 You are starting in the <WORKSPACE_NAME> workspace.
-
-<if parent: PARENT: <PARENT_WORKSPACE_NAME>>
 
 REPOS (already cloned + serve already running):
   - <repo1>:<branch1>
@@ -116,9 +140,9 @@ Everything below this line is included verbatim in the handoff prompt. The works
 
 ## Critical safety rules
 
-- **NEVER use `pkill -f` with the workspace name or workspace path.** Use `ws.py stop` — it asks the ws-daemon to signal bend over RPC.
+- **NEVER use `pkill -f` with the workspace name or workspace path.** Use `ws.py stop` — it SIGTERMs the serve process group and cleans up state.
 - **NEVER delete git branches** unless the user explicitly asks.
-- **NEVER hand-manage the bend serve process.** Do not `kill` the serve PID, do not spawn `bend reactor serve …` yourself, do not reconstruct a `bend reactor serve` command from `ps` output. Serve lifecycle — start, stop, restart, add-a-package — is always `ws.py restart|stop|add`. Hand-rolled restarts drop registration in `~/.hubspot/route-configs/` (`serveUp` flips false) and reconstructed commands silently miss the `--env bend-instance=<name>` / `--env local-static-domain=<name>.local.hsappstatic.net` flags — the instance URL then stops resolving. If serve looks stuck, `ws.py status <name>` first, then `ws.py restart <name>`.
+- **NEVER hand-manage the bend serve process.** Do not `kill` the serve PID, do not spawn `bend reactor serve …` yourself, do not reconstruct a `bend reactor serve` command from `ps` output. Serve lifecycle — start, stop, restart, add-a-package — is always `ws.py restart|stop|add`. Hand-rolled restarts drop registration in `~/.hubspot/route-configs/` (`serveUp` flips false) and reconstructed commands silently miss the env vars (`BEND_WORKTREE=<name>` / `WS_SUPERVISE_MARKER`) — the instance URL then stops resolving. If serve looks stuck, `ws.py status <name>` first, then `ws.py restart <name>`.
 
 ## Commands
 
@@ -133,19 +157,19 @@ Alias `WS=uv run ~/src/dotfiles/.claude/skills/ws/scripts/ws.py` mentally — co
 | `wait-ready <name> --timeout 600` | Blocks until `state: ready` (or timeout) |
 | `urls <name>` | Resolved app + test URLs. Use `url` field verbatim |
 | `logs <name> --tail N [--grep P]` | Serve log tail. Sets `tailOnly`/`truncated` flags |
-| `stop <name>` | Asks ws-daemon to SIGTERM bend; escalates to SIGKILL after 15s |
-| `restart <name>` | `stop` + re-launch |
+| `stop <name>` | SIGTERM bend's process group; escalates to SIGKILL after 15s |
+| `restart <name> [--node-memory MB]` | `stop` + re-launch; reuses prior nodeMemory if not overridden |
 | `nuke <name> [--delete-branches]` | Full teardown. Confirm with user before `--delete-branches` |
 
 ## First action after handoff
 
 Clone + yarn + serve were already done by `ws.py init` before you spawned. Your job is just to confirm things are healthy and report.
 
-```
-ws.py wait-ready <WORKSPACE_NAME> --timeout 600
-ws.py logs <WORKSPACE_NAME> --tail 200 --grep "ERROR|FATAL|EADDRINUSE|Cannot find module"
-ws.py urls <WORKSPACE_NAME>
-```
+Run these **sequentially, not in parallel**, and **run each exactly once**:
+
+1. `ws.py wait-ready <WORKSPACE_NAME> --timeout 600` — blocks until serve is ready (or timeout). It logs a progress line to stderr every ~15s; if you don't see stderr output, that does NOT mean it's stuck. Do NOT launch a second `wait-ready` while one is running, and do NOT run `logs`/`urls` in parallel with it.
+2. `ws.py logs <WORKSPACE_NAME> --tail 200 --grep "ERROR|FATAL|EADDRINUSE|Cannot find module"` — only after wait-ready returns.
+3. `ws.py urls <WORKSPACE_NAME>` — only after logs check is clean.
 
 If the log-check returns hits, surface them with the "Setup failed" template. Otherwise use "Workspace ready" with the URL data. Always run the log check — don't skip it.
 
@@ -185,7 +209,7 @@ When the user asks for monitoring, launch a background agent with:
 - `<pkg>`: `<url>`
 **Test URLs**: - `<pkg>`: `<test-url>`
 **Log check**: clean.
-**Serve**: owned by ws-daemon (tail with `ws.py logs <name>`).
+**Serve**: supervised by ws.py (tail with `ws.py logs <name>` or `tail -F <ws_dir>/.serve.log`).
 ```
 
 **Setup failed**:

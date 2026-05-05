@@ -6,7 +6,8 @@
 """ws.py — workspace manager CLI entry point.
 
 Single command-dispatch + argparse module. The heavy logic lives in
-`ws_lib.py` (pure helpers) and `ws_daemon.py` (daemon + RPC).
+`ws_lib.py` (pure helpers) and `ws_supervise.py` (bend-serve supervision,
+filesystem-backed, no daemon).
 
 Conventions:
 - All subcommands emit JSON to stdout. Human-readable progress → stderr.
@@ -16,7 +17,7 @@ Conventions:
 
 Usage:
     uv run ws.py plan <name> <repo[:branch]>...
-    uv run ws.py init <name> [--parent P]
+    uv run ws.py init <name>
     uv run ws.py setup <name>
     uv run ws.py add <name> <repo[:branch]>...
     uv run ws.py status <name>
@@ -27,7 +28,8 @@ Usage:
     uv run ws.py restart <name>
     uv run ws.py nuke <name> [--delete-branches]
     uv run ws.py discover <repo-path>
-    uv run ws.py daemon {run,start,stop,status,logs}
+    uv run ws.py prefs get
+    uv run ws.py prefs set-repo-memory <repo> <MB>
 """
 
 import argparse
@@ -45,11 +47,11 @@ from ws_lib import (
     LOG_TAIL_BYTES,
     SRC_ROOT,
     WS_ROOT,
+    WS_PREFERENCES_PATH,
     bend_yarn,
     checkout_branch,
     clone_repo,
     current_branch,
-    detect_parent_workspace,
     discover_repo,
     emit,
     emit_error,
@@ -57,10 +59,12 @@ from ws_lib import (
     has_claude_md,
     list_package_dirs,
     load_discovery_cache,
+    load_preferences,
     log,
     normalize,
     parse_repo_arg,
     resolve_remote,
+    save_preferences,
     select_packages,
     serve_log_path,
     tmux,
@@ -68,15 +72,7 @@ from ws_lib import (
     ws_dir,
     _provision_workspace_claude_dir,
 )
-from ws_daemon import (
-    DaemonNotRunning,
-    cmd_daemon_logs,
-    cmd_daemon_run,
-    cmd_daemon_start,
-    cmd_daemon_status,
-    cmd_daemon_stop,
-    daemon_rpc,
-)
+import ws_supervise
 
 
 # ---------------------------------------------------------------- Command: plan
@@ -95,11 +91,6 @@ def cmd_plan(args):
             "srcExists": (SRC_ROOT / repo).exists(),
         })
 
-    parent = detect_parent_workspace()
-    if parent == name:
-        parent = None
-
-    tmux_session = f"{parent}/{name}" if parent else name
     existing = ws_dir(name).exists()
 
     missing = [r for r in repos if not r["remoteResolved"]]
@@ -108,8 +99,7 @@ def cmd_plan(args):
     emit({
         "ok": ok,
         "workspace": name,
-        "parent": parent,
-        "tmuxSession": tmux_session,
+        "tmuxSession": name,
         "repos": repos,
         "existing": existing,
         "error": "unresolved-remotes" if missing else None,
@@ -138,8 +128,7 @@ def _compute_pkg_paths(name, setup_results):
 
 def cmd_init(args):
     name = normalize(args.name)
-    parent = normalize(args.parent) if args.parent else None
-    tmux_session = f"{parent}/{name}" if parent else name
+    tmux_session = name
     prompt_file = pathlib.Path(f"/tmp/ws-{name}-init-prompt.txt")
     wsdir = ws_dir(name)
 
@@ -170,15 +159,15 @@ def cmd_init(args):
 
         pkg_paths = _compute_pkg_paths(name, setup_results)
         if pkg_paths:
-            log(f"init: starting serve for {len(pkg_paths)} packages via daemon...")
-            resp = daemon_rpc(
-                "start_serve",
-                name=name,
-                pkgPaths=[str(p) for p in pkg_paths],
-                timeout=BEND_REGISTRATION_TIMEOUT_S + 30,
+            log(f"init: starting serve for {len(pkg_paths)} packages...")
+            resp = ws_supervise.start_serve(
+                name,
+                [str(p) for p in pkg_paths],
+                timeout=BEND_REGISTRATION_TIMEOUT_S,
+                node_memory=args.node_memory,
             )
             if not resp.get("ok"):
-                emit_error(f"daemon start_serve failed: {resp.get('error')}")
+                emit_error(f"start_serve failed: {resp.get('error')}")
                 return
         else:
             log("init: no packages to serve; skipping serve launch")
@@ -214,7 +203,6 @@ def cmd_init(args):
     emit({
         "ok": True,
         "workspace": name,
-        "parent": parent,
         "tmuxSession": tmux_session,
         "workspaceDir": str(wsdir),
         "setup": setup_results,
@@ -317,12 +305,12 @@ def cmd_setup(args):
     serve_started = False
     serve_error = None
     if pkg_paths:
-        log(f"setup: starting serve for {len(pkg_paths)} packages via daemon...")
-        resp = daemon_rpc(
-            "start_serve",
-            name=name,
-            pkgPaths=[str(p) for p in pkg_paths],
-            timeout=BEND_REGISTRATION_TIMEOUT_S + 30,
+        log(f"setup: starting serve for {len(pkg_paths)} packages...")
+        resp = ws_supervise.start_serve(
+            name,
+            [str(p) for p in pkg_paths],
+            timeout=BEND_REGISTRATION_TIMEOUT_S,
+            node_memory=getattr(args, "node_memory", None),
         )
         serve_started = bool(resp.get("ok"))
         if not serve_started:
@@ -374,12 +362,12 @@ def cmd_add(args):
     serve_restarted = False
     serve_error = None
     if pkg_paths:
-        log(f"add: restarting serve for {len(pkg_paths)} packages via daemon...")
-        resp = daemon_rpc(
-            "restart_serve",
-            name=name,
-            pkgPaths=[str(p) for p in pkg_paths],
-            timeout=BEND_REGISTRATION_TIMEOUT_S + 30,
+        log(f"add: restarting serve for {len(pkg_paths)} packages...")
+        resp = ws_supervise.restart_serve(
+            name,
+            [str(p) for p in pkg_paths],
+            timeout=BEND_REGISTRATION_TIMEOUT_S,
+            node_memory=getattr(args, "node_memory", None),
         )
         serve_restarted = bool(resp.get("ok"))
         if not serve_restarted:
@@ -400,23 +388,7 @@ def cmd_add(args):
 
 def cmd_status(args):
     name = normalize(args.name)
-    try:
-        resp = daemon_rpc("status", name=name, autostart=False)
-    except DaemonNotRunning:
-        emit({
-            "ok": True,
-            "workspace": name,
-            "state": "not_running",
-            "serveUp": False,
-            "claudeUp": False,
-            "packages": [],
-            "errors": [],
-            "urls": {},
-            "bendRegistered": False,
-            "daemonRunning": False,
-        })
-        return
-    resp["daemonRunning"] = True
+    resp = ws_supervise.status(name)
     resp.setdefault("allReady", resp.get("state") == "ready")
     emit(resp)
 
@@ -425,17 +397,20 @@ def cmd_status(args):
 
 def cmd_wait_ready(args):
     name = normalize(args.name)
-    deadline = time.time() + args.timeout
+    started = time.time()
+    deadline = started + args.timeout
     last_state = None
     poll_interval = 5
+    heartbeat_interval = 15
+    last_heartbeat = started
+    log(f"[{name}] wait-ready started (timeout={args.timeout}s, poll={poll_interval}s)")
 
     while time.time() < deadline:
-        try:
-            resp = daemon_rpc("status", name=name, autostart=False)
-            state = resp.get("state", "not_running")
-        except DaemonNotRunning:
-            state = "not_running"
+        resp = ws_supervise.status(name)
+        state = resp.get("state", "not_running")
         if state == "ready":
+            elapsed = int(time.time() - started)
+            log(f"[{name}] ready after {elapsed}s")
             cmd_status(args)
             return
         if state == "error":
@@ -445,6 +420,18 @@ def cmd_wait_ready(args):
         if state != last_state:
             log(f"[{name}] state={state}")
             last_state = state
+        now = time.time()
+        if now - last_heartbeat >= heartbeat_interval:
+            elapsed = int(now - started)
+            remaining = int(deadline - now)
+            pkgs = resp.get("packages") or []
+            pkgs_done = sum(1 for p in pkgs if p.get("compiled"))
+            pkgs_total = len(pkgs)
+            log(
+                f"[{name}] still waiting: elapsed={elapsed}s remaining={remaining}s "
+                f"state={state} packages={pkgs_done}/{pkgs_total}"
+            )
+            last_heartbeat = now
         time.sleep(poll_interval)
 
     log(f"[{name}] timeout after {args.timeout}s")
@@ -555,9 +542,9 @@ def cmd_logs(args):
 
 def cmd_stop(args):
     name = normalize(args.name)
-    resp = daemon_rpc("stop_serve", name=name)
+    resp = ws_supervise.stop_serve(name)
     if not resp.get("ok"):
-        emit_error(f"daemon stop_serve failed: {resp.get('error')}")
+        emit_error(f"stop_serve failed: {resp.get('error')}")
         return
     emit(resp)
 
@@ -588,15 +575,15 @@ def cmd_restart(args):
         emit_error(f"no packages found in {wsdir} to serve", recoverable=True)
         return
 
-    log(f"restart: restarting serve for {len(pkg_paths)} packages via daemon...")
-    resp = daemon_rpc(
-        "restart_serve",
-        name=name,
-        pkgPaths=[str(p) for p in pkg_paths],
-        timeout=BEND_REGISTRATION_TIMEOUT_S + 30,
+    log(f"restart: restarting serve for {len(pkg_paths)} packages...")
+    resp = ws_supervise.restart_serve(
+        name,
+        [str(p) for p in pkg_paths],
+        timeout=BEND_REGISTRATION_TIMEOUT_S,
+        node_memory=getattr(args, "node_memory", None),
     )
     if not resp.get("ok"):
-        emit_error(f"daemon restart_serve failed: {resp.get('error')}")
+        emit_error(f"restart_serve failed: {resp.get('error')}")
         return
 
     emit({
@@ -608,6 +595,27 @@ def cmd_restart(args):
     })
 
 
+# ---------------------------------------------------------------- Command: prefs
+
+def cmd_prefs(args):
+    prefs = load_preferences()
+
+    if args.action == "get":
+        emit({"ok": True, "path": str(WS_PREFERENCES_PATH), "prefs": prefs})
+        return
+
+    if args.action == "set-repo-memory":
+        repo = args.repo
+        memory = args.memory
+        repos = prefs.setdefault("repos", {})
+        repos.setdefault(repo, {})["nodeMemory"] = memory
+        save_preferences(prefs)
+        emit({"ok": True, "repo": repo, "nodeMemory": memory, "path": str(WS_PREFERENCES_PATH)})
+        return
+
+    emit_error(f"unknown prefs action: {args.action}", recoverable=False)
+
+
 # ---------------------------------------------------------------- Command: nuke
 
 def cmd_nuke(args):
@@ -615,25 +623,15 @@ def cmd_nuke(args):
     wsdir = ws_dir(name)
     actions = []
 
-    try:
-        stop_resp = daemon_rpc("stop_serve", name=name, autostart=False)
-        if stop_resp.get("ok"):
-            actions.append(f"daemon stop_serve: wasRunning={stop_resp.get('wasRunning')}")
-        else:
-            actions.append(f"daemon stop_serve failed: {stop_resp.get('error')}")
-    except DaemonNotRunning:
-        actions.append("daemon not running; skipped stop_serve")
+    stop_resp = ws_supervise.stop_serve(name)
+    if stop_resp.get("ok"):
+        actions.append(f"stop_serve: wasRunning={stop_resp.get('wasRunning')}")
+    else:
+        actions.append(f"stop_serve failed: {stop_resp.get('error')}")
 
-    # Kill workspace session and any child sessions. Match only the exact session
-    # name or sessions where this workspace is the parent (`name/child`). Do NOT
-    # match `*/<name>` — that would kill unrelated sessions that happen to end
-    # with the same path component.
-    sessions_result = tmux("list-sessions", "-F", "#{session_name}")
-    sessions = sessions_result.stdout.split() if sessions_result.returncode == 0 else []
-    for s in sessions:
-        if s == name or s.startswith(f"{name}/"):
-            tmux("kill-session", "-t", s)
-            actions.append(f"killed session {s}")
+    if tmux_has_session(name):
+        tmux("kill-session", "-t", name)
+        actions.append(f"killed session {name}")
 
     branches_deleted = []
     if args.delete_branches and wsdir.exists():
@@ -672,20 +670,32 @@ def main():
 
     p = sub.add_parser("init", help="Create tmux session + (optionally clone/yarn/serve) + launch workspace Claude")
     p.add_argument("name")
-    p.add_argument("--parent", default=None)
     p.add_argument(
         "--repos", nargs="+", default=None,
         help="Repo specs (repo[:branch]); when given, init runs the full setup "
              "(clone + yarn + serve) and waits for bend to register before "
              "launching the workspace Claude.",
     )
+    p.add_argument(
+        "--node-memory", type=int, default=None, dest="node_memory",
+        help="Node heap limit in MB for webpack subprocesses (default: 4096). "
+             "Use 16384 for crm-index-ui and other memory-hungry repos.",
+    )
 
     p = sub.add_parser("setup", help="Clone + yarn + discover + serve for workspace")
     p.add_argument("name")
+    p.add_argument(
+        "--node-memory", type=int, default=None, dest="node_memory",
+        help="Node heap limit in MB (default: 4096 or value from prior state).",
+    )
 
     p = sub.add_parser("add", help="Add repos to an existing workspace")
     p.add_argument("name")
     p.add_argument("repos", nargs="+")
+    p.add_argument(
+        "--node-memory", type=int, default=None, dest="node_memory",
+        help="Node heap limit in MB (default: reuse prior state or 4096).",
+    )
 
     p = sub.add_parser("status", help="Workspace status snapshot (JSON)")
     p.add_argument("name")
@@ -702,11 +712,15 @@ def main():
     p.add_argument("--tail", type=int, default=200)
     p.add_argument("--grep", default=None)
 
-    p = sub.add_parser("stop", help="Stop the serve daemon")
+    p = sub.add_parser("stop", help="Stop the bend serve for this workspace")
     p.add_argument("name")
 
     p = sub.add_parser("restart", help="Stop + start serve")
     p.add_argument("name")
+    p.add_argument(
+        "--node-memory", type=int, default=None, dest="node_memory",
+        help="Override Node heap limit in MB for this restart (default: reuse prior state).",
+    )
 
     p = sub.add_parser("nuke", help="Destroy workspace (serve, tmux, files)")
     p.add_argument("name")
@@ -716,28 +730,14 @@ def main():
     p.add_argument("repo_path")
     p.add_argument("--workspace", default=None)
 
-    p = sub.add_parser("daemon", help="ws-daemon lifecycle (single long-lived process)")
-    dsub = p.add_subparsers(dest="daemon_command", required=True)
-    dsub.add_parser("run", help="Foreground event loop (used by `start` after fork)")
-    dsub.add_parser("start", help="Spawn the daemon in the background")
-    dsub.add_parser("stop", help="Shut the daemon down over RPC")
-    dsub.add_parser("status", help="Is the daemon running?")
-    lg = dsub.add_parser("logs", help="Tail the daemon's log file")
-    lg.add_argument("--tail", type=int, default=200)
+    p = sub.add_parser("prefs", help="Read/write ws-preferences.json")
+    prefs_sub = p.add_subparsers(dest="action", required=True)
+    prefs_sub.add_parser("get", help="Print current preferences")
+    p2 = prefs_sub.add_parser("set-repo-memory", help="Set per-repo nodeMemory override")
+    p2.add_argument("repo", help="Repo name (e.g. crm-index-ui)")
+    p2.add_argument("memory", type=int, help="Node heap limit in MB (e.g. 16384)")
 
     args = parser.parse_args()
-
-    daemon_handlers = {
-        "run": cmd_daemon_run,
-        "start": cmd_daemon_start,
-        "stop": cmd_daemon_stop,
-        "status": cmd_daemon_status,
-        "logs": cmd_daemon_logs,
-    }
-
-    if args.command == "daemon":
-        daemon_handlers[args.daemon_command](args)
-        return
 
     handlers = {
         "plan": cmd_plan,
@@ -752,6 +752,7 @@ def main():
         "restart": cmd_restart,
         "nuke": cmd_nuke,
         "discover": cmd_discover,
+        "prefs": cmd_prefs,
     }
     try:
         handlers[args.command](args)
