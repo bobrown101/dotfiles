@@ -33,8 +33,10 @@ from ws_lib import (
     LOG_TAIL_BYTES,
     ROUTE_CONFIGS_DIR,
     SERVE_STOP_GRACE_S,
+    active_workspaces_memory,
     load_discovery_cache,
     log,
+    max_total_node_memory,
     node_memory_for_repos,
     normalize,
     parse_serve_log,
@@ -229,6 +231,30 @@ def start_serve(name, pkg_paths, timeout=None, node_memory=None):
             except (ValueError, IndexError):
                 pass
         effective_memory = node_memory_for_repos(repo_names)
+
+    # Enforce total Node memory budget across all active workspaces.
+    active = active_workspaces_memory()
+    current_total = sum(w["nodeMemory"] for w in active)
+    limit = max_total_node_memory()
+    projected = current_total + effective_memory
+    if projected > limit:
+        active_summary = [f"{w['name']}={w['nodeMemory']}MB" for w in active]
+        log(f"[{name}] memory-budget-exceeded: projected={projected}MB limit={limit}MB active=[{', '.join(active_summary)}]")
+        return {
+            "ok": False,
+            "error": "memory-budget-exceeded",
+            "message": (
+                f"Starting this workspace would use {projected}MB total Node heap "
+                f"(limit={limit}MB). Active workspaces: {', '.join(active_summary) or 'none'}. "
+                f"Stop or nuke a workspace first, or raise the limit: "
+                f"ws.py prefs set-max-memory <MB>"
+            ),
+            "activeWorkspaces": active,
+            "currentTotalMB": current_total,
+            "requestedMB": effective_memory,
+            "limitMB": limit,
+            "projectedMB": projected,
+        }
 
     existing = _snapshot_introspection_files()
     log(f"[{name}] spawning bend reactor serve for {len(pkg_paths)} pkg(s) (node_memory={effective_memory}MB)")

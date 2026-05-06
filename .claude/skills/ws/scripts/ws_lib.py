@@ -33,6 +33,7 @@ LOG_TAIL_BYTES = 50_000
 
 BEND_REGISTRATION_TIMEOUT_S = 120.0
 SERVE_STOP_GRACE_S = 15.0
+DEFAULT_MAX_TOTAL_NODE_MEMORY_MB = 24576  # 24 GB; configurable via prefs set-max-memory
 
 LB_DOMAIN_MAP = {
     "app": "app.hubspotqa.com",
@@ -228,6 +229,37 @@ def node_memory_for_repos(repo_names, prefs=None):
         (repo_prefs.get(r, {}).get("nodeMemory", 4096) for r in repo_names),
         default=4096,
     )
+
+
+def max_total_node_memory(prefs=None):
+    """Return the configured total-Node-memory cap across all workspaces (MB)."""
+    if prefs is None:
+        prefs = load_preferences()
+    return prefs.get("maxTotalNodeMemory", DEFAULT_MAX_TOTAL_NODE_MEMORY_MB)
+
+
+def active_workspaces_memory():
+    """Return [{name, nodeMemory, pid}] for every workspace with a live serve process."""
+    if not WS_ROOT.exists():
+        return []
+    results = []
+    for ws in sorted(WS_ROOT.iterdir()):
+        state_path = ws / ".ws-serve.json"
+        if not ws.is_dir() or ws.name.startswith(".") or not state_path.exists():
+            continue
+        try:
+            state = json.loads(state_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        pid = state.get("pid")
+        lstart = state.get("lstart")
+        if not pid or not process_alive(pid):
+            continue
+        have_lstart = process_start_time(pid)
+        if not have_lstart or have_lstart != lstart:
+            continue
+        results.append({"name": ws.name, "nodeMemory": state.get("nodeMemory", 4096), "pid": pid})
+    return results
 
 
 # ---------------------------------------------------------------- Git / repo resolution
