@@ -36,7 +36,6 @@ from ws_lib import (
     active_workspaces_memory,
     load_discovery_cache,
     log,
-    max_total_node_memory,
     node_memory_for_repos,
     normalize,
     parse_serve_log,
@@ -109,16 +108,15 @@ def _snapshot_introspection_files():
         return set()
 
 
-def _spawn_bend_serve(name, pkg_paths, node_memory=4096):
+def _spawn_bend_serve(name, pkg_paths, node_memory=0):
     """Spawn `bend reactor serve` detached (new session, own pgid).
 
     Returns (pid, lstart, marker). The child's stdout/stderr go to
     <ws_dir>/.serve.log (truncated first, so every fresh start is clean).
 
     node_memory: MB for --max_old_space_size passed to webpack subprocesses.
-    Defaults to 4096 (not inherited from shell) so concurrent workspaces don't
-    each consume the shell-global 8192MB limit across many Node workers.
-    Use 16384 for crm-index-ui and other memory-hungry repos.
+    Defaults to 0 (let V8 auto-size based on available system RAM). Pass an
+    explicit value like 4096 or 16384 to cap per-workspace Node heap.
     """
     wsdir = ws_dir(name)
     wsdir.mkdir(parents=True, exist_ok=True)
@@ -202,8 +200,7 @@ def start_serve(name, pkg_paths, timeout=None, node_memory=None):
     """Start bend reactor serve for a workspace. Waits for bend to register
     with route-configs before returning (or until `timeout` seconds).
 
-    node_memory: MB for Node heap per webpack subprocess. Defaults to 4096.
-    Pass 16384 for crm-index-ui and other memory-hungry repos.
+    node_memory: MB for --max_old_space_size. Defaults to 0 (V8 auto-sizes).
     """
     name = normalize(name)
     pkg_paths = [pathlib.Path(p) for p in pkg_paths]
@@ -231,30 +228,6 @@ def start_serve(name, pkg_paths, timeout=None, node_memory=None):
             except (ValueError, IndexError):
                 pass
         effective_memory = node_memory_for_repos(repo_names)
-
-    # Enforce total Node memory budget across all active workspaces.
-    active = active_workspaces_memory()
-    current_total = sum(w["nodeMemory"] for w in active)
-    limit = max_total_node_memory()
-    projected = current_total + effective_memory
-    if projected > limit:
-        active_summary = [f"{w['name']}={w['nodeMemory']}MB" for w in active]
-        log(f"[{name}] memory-budget-exceeded: projected={projected}MB limit={limit}MB active=[{', '.join(active_summary)}]")
-        return {
-            "ok": False,
-            "error": "memory-budget-exceeded",
-            "message": (
-                f"Starting this workspace would use {projected}MB total Node heap "
-                f"(limit={limit}MB). Active workspaces: {', '.join(active_summary) or 'none'}. "
-                f"Stop or nuke a workspace first, or raise the limit: "
-                f"ws.py prefs set-max-memory <MB>"
-            ),
-            "activeWorkspaces": active,
-            "currentTotalMB": current_total,
-            "requestedMB": effective_memory,
-            "limitMB": limit,
-            "projectedMB": projected,
-        }
 
     existing = _snapshot_introspection_files()
     log(f"[{name}] spawning bend reactor serve for {len(pkg_paths)} pkg(s) (node_memory={effective_memory}MB)")

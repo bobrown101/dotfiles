@@ -53,9 +53,9 @@ If repos are given in natural language, confirm your interpretation before proce
    uv run {{SKILL_PATH}}/scripts/ws.py plan <name> <repo1> <repo2:branch>...
    ```
 
-2. **Briefly state what you're doing** (one line — workspace name + repos). Don't wait for approval; proceed straight to step 3. Tell the user init will take a few minutes and you'll stream serve logs inline as compilation progresses.
+2. **Briefly state what you're doing** (one line — workspace name + repos). Don't wait for approval; proceed straight to step 3. Tell the user init will take a few minutes and that the workspace Claude will report serve status from inside the tmux session.
 
-3. **Run `ws.py init`** in the background and stream serve logs via Monitor:
+3. **Run `ws.py init`** in the background:
 
    a. Launch init in the background (Bash with `run_in_background: true`) — it will notify you when done:
       ```
@@ -66,15 +66,11 @@ If repos are given in natural language, confirm your interpretation before proce
       See "Building the handoff prompt" below for the prompt template.
       **Always run `ws.py list` before init** to check `headroomMB`. See `ws.py prefs --help` for memory configuration.
 
-   b. Immediately start a Monitor to stream serve log progress inline:
-      ```
-      uv run {{SKILL_PATH}}/scripts/ws.py follow-logs <name>
-      ```
-      Use `timeout_ms: 300000`, `persistent: false`.
+   b. When the background init task completes, parse the JSON result.
 
-   c. When the background init task completes, stop the Monitor (TaskStop) and parse the JSON result.
+   **DO NOT** start a Monitor to follow serve logs. The workspace Claude runs inside the tmux session and is solely responsible for monitoring serve progress and reporting ready/error status. Watching logs from the creator duplicates that work, fills your context with noise, and is the wrong agent for the job.
 
-4. **Tell the user** how to access the new workspace (from `init`'s JSON output). Done.
+4. **Tell the user** how to access the new workspace (from `init`'s JSON output) and that they should `tmux attach -t <name>` to see the workspace Claude's status report. **The creator's job is done** — do not continue monitoring, polling, or checking serve status.
 
 ---
 

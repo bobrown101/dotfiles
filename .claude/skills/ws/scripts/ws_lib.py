@@ -33,7 +33,6 @@ LOG_TAIL_BYTES = 50_000
 
 BEND_REGISTRATION_TIMEOUT_S = 120.0
 SERVE_STOP_GRACE_S = 15.0
-DEFAULT_MAX_TOTAL_NODE_MEMORY_MB = 24576  # 24 GB; configurable via prefs set-max-memory
 
 LB_DOMAIN_MAP = {
     "app": "app.hubspotqa.com",
@@ -226,16 +225,10 @@ def node_memory_for_repos(repo_names, prefs=None):
         prefs = load_preferences()
     repo_prefs = prefs.get("repos", {})
     return max(
-        (repo_prefs.get(r, {}).get("nodeMemory", 4096) for r in repo_names),
-        default=4096,
+        (repo_prefs.get(r, {}).get("nodeMemory", 0) for r in repo_names),
+        default=0,
     )
 
-
-def max_total_node_memory(prefs=None):
-    """Return the configured total-Node-memory cap across all workspaces (MB)."""
-    if prefs is None:
-        prefs = load_preferences()
-    return prefs.get("maxTotalNodeMemory", DEFAULT_MAX_TOTAL_NODE_MEMORY_MB)
 
 
 def active_workspaces_memory():

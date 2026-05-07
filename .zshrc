@@ -106,7 +106,6 @@ alias brewup="brew update; brew upgrade; brew cleanup; brew doctor"
 alias ll="ls -al"
 alias v="nvim -V10$HOME/Desktop/neovim.log"
 alias t="tmuxinator"
-export NODE_ARGS='--max_old_space_size=8192'
 
 
 

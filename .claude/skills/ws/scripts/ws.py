@@ -62,7 +62,6 @@ from ws_lib import (
     load_discovery_cache,
     load_preferences,
     log,
-    max_total_node_memory,
     normalize,
     parse_repo_arg,
     resolve_remote,
@@ -455,14 +454,9 @@ def cmd_list(args):
             "repos": repos,
         })
 
-    active_total = sum(w["nodeMemory"] for w in active_map.values())
-    limit = max_total_node_memory()
     emit({
         "ok": True,
         "workspaces": workspaces,
-        "activeTotalNodeMemoryMB": active_total,
-        "limitMB": limit,
-        "headroomMB": limit - active_total,
     })
 
 
@@ -724,13 +718,6 @@ def cmd_prefs(args):
         emit({"ok": True, "repo": repo, "nodeMemory": memory, "path": str(WS_PREFERENCES_PATH)})
         return
 
-    if args.action == "set-max-memory":
-        memory = args.memory
-        prefs["maxTotalNodeMemory"] = memory
-        save_preferences(prefs)
-        emit({"ok": True, "maxTotalNodeMemory": memory, "path": str(WS_PREFERENCES_PATH)})
-        return
-
     emit_error(f"unknown prefs action: {args.action}", recoverable=False)
 
 
@@ -873,9 +860,8 @@ def main():
             "  ws.py restart my-feature\n\n"
             "  # Resume after a reboot (files exist, serve is down)\n"
             "  ws.py setup my-feature\n\n"
-            "  # Memory is tight — free a workspace or raise the cap\n"
-            "  ws.py nuke old-workspace          # confirm with user first\n"
-            "  ws.py prefs set-max-memory 32768\n\n"
+            "  # Free up a workspace\n"
+            "  ws.py nuke old-workspace          # confirm with user first\n\n"
             "Run `ws.py <cmd> --help` for full details on any command."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -921,8 +907,7 @@ def main():
             "The prompt is written to <workspace>/INIT-PROMPT.txt and persists there.\n"
             "If --prompt is omitted and INIT-PROMPT.txt already exists, init reuses it (re-init).\n"
             "After init returns, the CREATOR is done — do not do any further setup work.\n\n"
-            "AI AGENTS (CREATOR): Run 'ws.py list' first and check headroomMB — if insufficient,\n"
-            "nuke an old workspace or raise the cap with 'ws.py prefs set-max-memory'.\n"
+            "AI AGENTS (CREATOR): Run 'ws.py list' first — if too many workspaces are alive, nuke an old one.\n"
             "After init returns, creator is done — do not do further setup work.\n\n"
             "Note: init takes repos as --repos (ws.py init <name> --repos <repo:branch> ...),\n"
             "unlike plan which takes them as positional args.\n\n"
@@ -1215,19 +1200,14 @@ def main():
             "Manages persistent memory preferences for workspaces.\n\n"
             "ws.py enforces a total Node memory cap across all active workspaces (default: 24576 MB).\n"
             "Each workspace has a per-repo Node heap limit (default: 4096 MB). Memory-hungry repos\n"
-            "like crm-index-ui typically need 16384 MB.\n\n"
-            "Preferences are stored on disk and applied automatically — no flags needed at runtime\n"
-            "once a repo is configured.\n\n"
+            "Node uses V8 auto-sizing (--max_old_space_size=0) by default.\n"
+            "Per-repo memory overrides can still be set for repos that need a specific cap.\n\n"
             "Subcommands:\n"
             "  get                              — print all current preferences\n"
-            "  set-repo-memory <repo> <MB>      — set per-repo Node heap limit\n"
-            "  set-max-memory <MB>              — set global cap across all workspaces\n\n"
+            "  set-repo-memory <repo> <MB>      — set per-repo Node heap limit\n\n"
             "Examples:\n"
-            "  ws.py prefs set-repo-memory crm-index-ui 16384\n"
-            "  ws.py prefs set-max-memory 32768\n"
-            "  ws.py prefs get\n\n"
-            "If init fails with memory-budget-exceeded, either nuke an old workspace to free\n"
-            "headroom, or raise the cap with set-max-memory."
+            "  ws.py prefs set-repo-memory crm-index-ui 8192\n"
+            "  ws.py prefs get"
         ),
         formatter_class=RD,
     )
@@ -1236,8 +1216,6 @@ def main():
     p2 = prefs_sub.add_parser("set-repo-memory", help="Set per-repo Node heap limit")
     p2.add_argument("repo", help="Repo name (e.g. crm-index-ui)")
     p2.add_argument("memory", type=int, help="Node heap limit in MB (e.g. 16384)")
-    p2 = prefs_sub.add_parser("set-max-memory", help="Set total Node memory cap across all workspaces")
-    p2.add_argument("memory", type=int, help="Max total Node heap in MB (default: 24576)")
 
     args = parser.parse_args()
 
