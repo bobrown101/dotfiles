@@ -53,17 +53,26 @@ If repos are given in natural language, confirm your interpretation before proce
    uv run {{SKILL_PATH}}/scripts/ws.py plan <name> <repo1> <repo2:branch>...
    ```
 
-2. **Briefly state what you're doing** (one line — workspace name + repos). Don't wait for approval; proceed straight to step 3. Tell the user init will take a few minutes; they can tail logs with `ws.py logs <name> --tail 200` while they wait.
+2. **Briefly state what you're doing** (one line — workspace name + repos). Don't wait for approval; proceed straight to step 3. Tell the user init will take a few minutes and you'll stream serve logs inline as compilation progresses.
 
-3. **Run `ws.py init`** with the prompt inline — blocks ~2–4 min before launching workspace Claude:
-   ```
-   uv run {{SKILL_PATH}}/scripts/ws.py init <name> \
-     --repos <repo1>:<branch1> <repo2>:<branch2> ... \
-     --prompt "<handoff prompt text>"
-   ```
-   ws.py writes the prompt to `<workspace>/INIT-PROMPT.txt` where it persists.
-   See "Building the handoff prompt" below for the prompt template.
-   **Always run `ws.py list` before init** to check `headroomMB`. See `ws.py prefs --help` for memory configuration.
+3. **Run `ws.py init`** in the background and stream serve logs via Monitor:
+
+   a. Launch init in the background (Bash with `run_in_background: true`) — it will notify you when done:
+      ```
+      uv run {{SKILL_PATH}}/scripts/ws.py init <name> \
+        --repos <repo1>:<branch1> <repo2>:<branch2> ... \
+        --prompt "<handoff prompt text>"
+      ```
+      See "Building the handoff prompt" below for the prompt template.
+      **Always run `ws.py list` before init** to check `headroomMB`. See `ws.py prefs --help` for memory configuration.
+
+   b. Immediately start a Monitor to stream serve log progress inline:
+      ```
+      uv run {{SKILL_PATH}}/scripts/ws.py follow-logs <name>
+      ```
+      Use `timeout_ms: 300000`, `persistent: false`.
+
+   c. When the background init task completes, stop the Monitor (TaskStop) and parse the JSON result.
 
 4. **Tell the user** how to access the new workspace (from `init`'s JSON output). Done.
 

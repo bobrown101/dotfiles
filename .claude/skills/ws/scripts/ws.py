@@ -620,6 +620,35 @@ def cmd_logs(args):
     })
 
 
+# ---------------------------------------------------------------- Command: follow-logs
+
+def cmd_follow_logs(args):
+    """Stream filtered serve log output to stdout; runs until killed (designed for Monitor)."""
+    import time
+    name = normalize(args.name)
+    log_path = serve_log_path(name)
+    pattern = re.compile(
+        r"error|failed|compiled|warning|warn|ready|packages|✓|✗",
+        re.IGNORECASE,
+    )
+
+    deadline = time.time() + 300
+    while not log_path.exists():
+        if time.time() > deadline:
+            print("follow-logs: serve log never appeared within 5 minutes", flush=True)
+            return
+        time.sleep(3)
+
+    with open(log_path, "r", errors="replace") as f:
+        while True:
+            line = f.readline()
+            if line:
+                if pattern.search(line):
+                    print(line, end="", flush=True)
+            else:
+                time.sleep(0.25)
+
+
 # ---------------------------------------------------------------- Command: stop
 
 def cmd_stop(args):
@@ -1086,6 +1115,19 @@ def main():
     p.add_argument("--grep", default=None, help="Python regex to filter lines.")
 
     p = sub.add_parser(
+        "follow-logs",
+        help="Stream filtered serve log output in real time (designed for use with Monitor).",
+        description=(
+            "Waits for the serve log to appear (created once bend serve starts), then streams\n"
+            "filtered output — errors, warnings, compile progress, and ready signals — to stdout.\n\n"
+            "Runs until killed; use with the Monitor tool so each matching line becomes a\n"
+            "notification. Stop it via TaskStop when ws.py init completes."
+        ),
+        formatter_class=RD,
+    )
+    p.add_argument("name")
+
+    p = sub.add_parser(
         "stop",
         help="Stop the bend serve for this workspace.",
         description=(
@@ -1210,6 +1252,7 @@ def main():
         "wait-ready": cmd_wait_ready,
         "urls": cmd_urls,
         "logs": cmd_logs,
+        "follow-logs": cmd_follow_logs,
         "stop": cmd_stop,
         "restart": cmd_restart,
         "nuke": cmd_nuke,
