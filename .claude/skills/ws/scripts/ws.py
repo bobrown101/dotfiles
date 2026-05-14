@@ -50,6 +50,7 @@ from ws_lib import (
     WS_PREFERENCES_PATH,
     active_workspaces_memory,
     bend_generate_code,
+    bend_install_update,
     bend_yarn,
     checkout_branch,
     clone_repo,
@@ -195,6 +196,8 @@ def cmd_init(args):
 
         pkg_paths = _compute_pkg_paths(name, setup_results)
         if pkg_paths:
+            log(f"init: installing + updating evergreen deps for {len(pkg_paths)} packages...")
+            bend_install_update(pkg_paths, cwd=wsdir)
             log(f"init: generating code for {len(pkg_paths)} packages...")
             bend_generate_code(pkg_paths, cwd=wsdir)
             log(f"init: starting serve for {len(pkg_paths)} packages...")
@@ -342,6 +345,8 @@ def cmd_setup(args):
     serve_started = False
     serve_error = None
     if pkg_paths:
+        log(f"setup: installing + updating evergreen deps for {len(pkg_paths)} packages...")
+        bend_install_update(pkg_paths, cwd=wsdir)
         log(f"setup: generating code for {len(pkg_paths)} packages...")
         bend_generate_code(pkg_paths, cwd=wsdir)
         log(f"setup: starting serve for {len(pkg_paths)} packages...")
@@ -401,6 +406,8 @@ def cmd_add(args):
     serve_restarted = False
     serve_error = None
     if pkg_paths:
+        log(f"add: installing + updating evergreen deps for {len(pkg_paths)} packages...")
+        bend_install_update(pkg_paths, cwd=wsdir)
         log(f"add: generating code for {len(pkg_paths)} packages...")
         bend_generate_code(pkg_paths, cwd=wsdir)
         log(f"add: restarting serve for {len(pkg_paths)} packages...")

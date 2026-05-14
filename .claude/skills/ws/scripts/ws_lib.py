@@ -727,6 +727,21 @@ def bend_yarn(repo_clone):
     return {"repo": repo_clone.name, "ok": True}
 
 
+def bend_install_update(pkg_paths, cwd=None):
+    log(f"bend install --update ({len(pkg_paths)} packages)")
+    result = subprocess.run(
+        ["bend", "install", *[str(p) for p in pkg_paths], "--update"],
+        cwd=str(cwd) if cwd else None,
+        capture_output=True, text=True, timeout=600,
+    )
+    if result.returncode != 0:
+        return {
+            "ok": False,
+            "error": f"bend install --update failed: {result.stderr.strip()[:500]}",
+        }
+    return {"ok": True}
+
+
 def bend_generate_code(pkg_paths, cwd=None):
     log(f"bend generate-code --update ({len(pkg_paths)} packages)")
     result = subprocess.run(
