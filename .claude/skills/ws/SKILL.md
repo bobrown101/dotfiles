@@ -116,9 +116,17 @@ Setup was already done by `ws.py init` before you spawned. Run the post-init sta
 
 If the user asks to add a repo, use `ws.py add <name> <repo>:<branch>`. If resuming a workspace whose files exist but serve is down, use `ws.py setup <name>`.
 
-## Validating code with bend MCP tools
+## Validating code
 
-Bend tools are **deferred** — schemas aren't loaded until you fetch them via `ToolSearch` with query `bend`. If the tool isn't in your immediate list, search first; don't conclude it's missing. Never fall back to shell `tsc`/`jasmine`. Tests take 2–5 min, TS checks up to 120s — don't restart serve because tests are slow.
+Use one-shot CLI commands — do not rely on the running dev server for validation:
+
+```
+bend check <package>                          # TypeScript, lint, format
+bend test <package>                           # run Jasmine tests once
+bend test --test-filter "description" <pkg>  # targeted test
+```
+
+Tests take 2–5 min and TS checks up to 120s — do not restart the dev server because validation is slow.
 
 ## Background monitor and report templates
 

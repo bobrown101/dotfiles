@@ -49,6 +49,7 @@ from ws_lib import (
     WS_ROOT,
     WS_PREFERENCES_PATH,
     active_workspaces_memory,
+    bend_generate_code,
     bend_yarn,
     checkout_branch,
     clone_repo,
@@ -176,9 +177,8 @@ def cmd_init(args):
         sys.exit(1)
 
     # If repos were specified, do the full setup BEFORE launching the workspace
-    # Claude. This ensures bend reactor serve has registered with route-configs
-    # by the time the workspace Claude spawns its devex-mcp-server, so the
-    # bend_* MCP tools are actually available to it.
+    # Claude. This ensures bend dev has compiled all packages by the time
+    # workspace Claude starts, so it can immediately run bend check/test.
     setup_results = None
     if args.repos:
         repo_specs = []
@@ -195,6 +195,8 @@ def cmd_init(args):
 
         pkg_paths = _compute_pkg_paths(name, setup_results)
         if pkg_paths:
+            log(f"init: generating code for {len(pkg_paths)} packages...")
+            bend_generate_code(pkg_paths, cwd=wsdir)
             log(f"init: starting serve for {len(pkg_paths)} packages...")
             resp = ws_supervise.start_serve(
                 name,
@@ -208,8 +210,7 @@ def cmd_init(args):
         else:
             log("init: no packages to serve; skipping serve launch")
 
-    # Write launcher and launch workspace Claude via hsclaude (dvx wrapper)
-    # so its MCP servers (devex-mcp-server) are wired up correctly.
+    # Write launcher and launch workspace Claude via hsclaude (dvx wrapper).
     launcher = pathlib.Path(f"/tmp/ws-{name}-launch.sh")
     launcher.write_text(
         "#!/bin/bash\n"
@@ -341,6 +342,8 @@ def cmd_setup(args):
     serve_started = False
     serve_error = None
     if pkg_paths:
+        log(f"setup: generating code for {len(pkg_paths)} packages...")
+        bend_generate_code(pkg_paths, cwd=wsdir)
         log(f"setup: starting serve for {len(pkg_paths)} packages...")
         resp = ws_supervise.start_serve(
             name,
@@ -398,6 +401,8 @@ def cmd_add(args):
     serve_restarted = False
     serve_error = None
     if pkg_paths:
+        log(f"add: generating code for {len(pkg_paths)} packages...")
+        bend_generate_code(pkg_paths, cwd=wsdir)
         log(f"add: restarting serve for {len(pkg_paths)} packages...")
         resp = ws_supervise.restart_serve(
             name,
@@ -696,7 +701,7 @@ def cmd_restart(args):
         "workspace": name,
         "servePackages": [str(p) for p in pkg_paths],
         "servePid": resp.get("servePid"),
-        "bendRegistered": resp.get("bendRegistered"),
+        "devReady": resp.get("devReady"),
     })
 
 
@@ -837,7 +842,7 @@ def main():
             "  Workspace Claude  — runs inside the workspace session after handoff.\n"
             "                      Handles add/setup/restart/urls/logs/status.\n\n"
             "AI AGENT SAFETY: Never reach behind this CLI. No pkill, no killing PIDs directly,\n"
-            "no spawning serve processes by hand, no touching state files or route-configs.\n"
+            "no spawning dev processes by hand, no touching state files directly.\n"
             "Every operation has a ws.py command — use it.\n\n"
             "Typical workflow:\n"
             "  1. ws.py list                                    — check available memory headroom\n"
@@ -896,14 +901,15 @@ def main():
 
     p = sub.add_parser(
         "init",
-        help="Clone + yarn + start serve + launch workspace Claude in a new tmux session.",
+        help="Clone + yarn + generate-code + start bend dev + launch workspace Claude in a new tmux session.",
         description=(
             "Full workspace bootstrap. Blocks for ~2-4 min while it:\n"
             "  1. Clones each repo to ~/src/workspaces/<name>/<repo>/\n"
             "  2. Runs yarn install\n"
-            "  3. Starts bend reactor serve (supervised, with BEND_WORKTREE=<name>)\n"
-            "  4. Waits for bend to register in ~/.hubspot/route-configs/\n"
-            "  5. Launches workspace Claude inside a new tmux session named <name>\n\n"
+            "  3. Runs bend generate-code --update across all packages\n"
+            "  4. Starts bend dev (supervised, with BEND_WORKTREE=<name>)\n"
+            "  5. Waits for all packages to compile\n"
+            "  6. Launches workspace Claude inside a new tmux session named <name>\n\n"
             "The prompt is written to <workspace>/INIT-PROMPT.txt and persists there.\n"
             "If --prompt is omitted and INIT-PROMPT.txt already exists, init reuses it (re-init).\n"
             "After init returns, the CREATOR is done — do not do any further setup work.\n\n"
@@ -1034,8 +1040,8 @@ def main():
             "  urls          — {app, test} URL map\n\n"
             "Use before `restart` or `nuke` to understand what's actually wrong.\n"
             "If state is 'error', read `errors` and try `restart` before escalating.\n\n"
-            "AI AGENTS: Bend MCP tools require state: 'ready'. If Bend tools are unavailable,\n"
-            "check this output before assuming an environment problem."
+            "AI AGENTS: Use bend check / bend test from the CLI for validation — not the dev server.\n"
+            "Run ws.py status to confirm the dev server is up before running bend check/test."
         ),
         formatter_class=RD,
     )
@@ -1120,7 +1126,7 @@ def main():
             "if serve does not exit cleanly. Updates the state file.\n\n"
             "Does NOT delete workspace files. Does NOT kill the tmux session.\n\n"
             "Use stop + restart (or just `restart`) rather than hand-killing the PID —\n"
-            "direct kills leave route-configs/ stale and drop the BEND_WORKTREE env var."
+            "direct kills bypass the state file and leave the BEND_WORKTREE env var unset on next start."
         ),
         formatter_class=RD,
     )

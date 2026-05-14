@@ -1,7 +1,7 @@
-"""ws_supervise — filesystem-backed bend-serve supervision, no daemon.
+"""ws_supervise — filesystem-backed bend dev supervision, no daemon.
 
 Replaces ws_daemon.py. The three things the daemon did:
-  1. Process ownership of bend reactor serve
+  1. Process ownership of bend dev
   2. Cross-process coordination for status/wait-ready/logs
   3. Streaming log tail through file rotation
 
@@ -10,7 +10,7 @@ Replaces ws_daemon.py. The three things the daemon did:
      Once spawned, it outlives the ws.py CLI invocation.
   2. The filesystem is the source of truth. Per-workspace state lives at
      `<ws_dir>/.ws-serve.json`: pid, lstart, marker uuid, pkg paths,
-     bendRegistered. Every ws.py call re-reads it.
+     devReady. Every ws.py call re-reads it.
   3. `ws.py logs` reads the log file directly; if you want tail -F behavior,
      run `tail -F <ws_dir>/.serve.log` in your shell.
 
@@ -31,7 +31,6 @@ import uuid
 from ws_lib import (
     BEND_REGISTRATION_TIMEOUT_S,
     LOG_TAIL_BYTES,
-    ROUTE_CONFIGS_DIR,
     SERVE_STOP_GRACE_S,
     active_workspaces_memory,
     load_discovery_cache,
@@ -96,20 +95,8 @@ def _serve_alive(state):
 
 # ---------------------------------------------------------------- Spawn
 
-def _snapshot_introspection_files():
-    if not ROUTE_CONFIGS_DIR.exists():
-        return set()
-    try:
-        return {
-            f.name for f in ROUTE_CONFIGS_DIR.iterdir()
-            if f.name.endswith("-introspection")
-        }
-    except OSError:
-        return set()
-
-
-def _spawn_bend_serve(name, pkg_paths, node_memory=0):
-    """Spawn `bend reactor serve` detached (new session, own pgid).
+def _spawn_bend_dev(name, pkg_paths, node_memory=0):
+    """Spawn `bend dev` detached (new session, own pgid).
 
     Returns (pid, lstart, marker). The child's stdout/stderr go to
     <ws_dir>/.serve.log (truncated first, so every fresh start is clean).
@@ -135,9 +122,8 @@ def _spawn_bend_serve(name, pkg_paths, node_memory=0):
     env["NODE_ARGS"] = f"--max_old_space_size={node_memory}"
 
     cmd = [
-        "bend", "reactor", "serve",
+        "bend", "dev",
         *[str(p) for p in pkg_paths],
-        "--update", "--ts-watch", "--enable-tools", "--run-tests",
     ]
 
     with open(log_file, "ab") as logf:
@@ -156,16 +142,26 @@ def _spawn_bend_serve(name, pkg_paths, node_memory=0):
     return proc.pid, lstart, marker
 
 
-def _wait_for_bend_registration(pid, existing_snapshot, timeout):
-    """Block until bend writes a NEW *-introspection file to route-configs,
-    or the bend process dies, or we time out."""
+def _wait_for_dev_ready(name, pid, timeout):
+    """Block until bend dev log shows all packages compiled, the process dies,
+    or we time out. Returns True if all packages reached compiled state."""
     deadline = time.time() + timeout
+    log_file = serve_log_path(name)
     while time.time() < deadline:
         if not process_alive(pid):
             return False
-        new_files = _snapshot_introspection_files() - existing_snapshot
-        if new_files:
-            return True
+        if log_file.exists():
+            try:
+                size = log_file.stat().st_size
+                with open(log_file, "rb") as f:
+                    if size > LOG_TAIL_BYTES:
+                        f.seek(size - LOG_TAIL_BYTES)
+                    text = f.read().decode("utf-8", errors="replace")
+                result = parse_serve_log(text)
+                if result.get("allReady"):
+                    return True
+            except OSError:
+                pass
         time.sleep(1)
     return False
 
@@ -197,8 +193,8 @@ def _derive_urls_for(name):
 # ---------------------------------------------------------------- Public API
 
 def start_serve(name, pkg_paths, timeout=None, node_memory=None):
-    """Start bend reactor serve for a workspace. Waits for bend to register
-    with route-configs before returning (or until `timeout` seconds).
+    """Start bend dev for a workspace. Waits for all packages to compile
+    before returning (or until `timeout` seconds).
 
     node_memory: MB for --max_old_space_size. Defaults to 0 (V8 auto-sizes).
     """
@@ -229,14 +225,13 @@ def start_serve(name, pkg_paths, timeout=None, node_memory=None):
                 pass
         effective_memory = node_memory_for_repos(repo_names)
 
-    existing = _snapshot_introspection_files()
-    log(f"[{name}] spawning bend reactor serve for {len(pkg_paths)} pkg(s) (node_memory={effective_memory}MB)")
-    pid, lstart, marker = _spawn_bend_serve(name, pkg_paths, node_memory=effective_memory)
+    log(f"[{name}] spawning bend dev for {len(pkg_paths)} pkg(s) (node_memory={effective_memory}MB)")
+    pid, lstart, marker = _spawn_bend_dev(name, pkg_paths, node_memory=effective_memory)
     log(f"[{name}] bend pid={pid} lstart={lstart!r}")
 
     timeout_s = timeout if timeout is not None else BEND_REGISTRATION_TIMEOUT_S
-    registered = _wait_for_bend_registration(pid, existing, timeout_s)
-    log(f"[{name}] bend registered={registered}")
+    dev_ready = _wait_for_dev_ready(name, pid, timeout_s)
+    log(f"[{name}] bend dev_ready={dev_ready}")
 
     _save_state(name, {
         "pid": pid,
@@ -244,7 +239,7 @@ def start_serve(name, pkg_paths, timeout=None, node_memory=None):
         "marker": marker,
         "pkgPaths": [str(p) for p in pkg_paths],
         "nodeMemory": effective_memory,
-        "bendRegistered": registered,
+        "devReady": dev_ready,
         "startedAt": time.time(),
     })
 
@@ -252,7 +247,7 @@ def start_serve(name, pkg_paths, timeout=None, node_memory=None):
         "ok": True,
         "workspace": name,
         "servePid": pid,
-        "bendRegistered": registered,
+        "devReady": dev_ready,
         "state": "running" if process_alive(pid) else "exited",
     }
 
@@ -330,7 +325,7 @@ def status(name):
             "errors": [],
             "urls": {},
             "pkgPaths": [],
-            "bendRegistered": False,
+            "devReady": False,
         }
 
     alive, pid = _serve_alive(state)
@@ -367,6 +362,6 @@ def status(name):
         "errors": errors,
         "urls": _derive_urls_for(name),
         "pkgPaths": state.get("pkgPaths", []),
-        "bendRegistered": bool(state.get("bendRegistered")),
+        "devReady": bool(state.get("devReady")),
         "allReady": serve_state == "ready",
     }

@@ -24,7 +24,6 @@ SRC_ROOT = HOME / "src"
 WS_ROOT = SRC_ROOT / "workspaces"
 DISCOVERY_CACHE_PATH = WS_ROOT / "workspace-discovery-cache.json"
 WS_PREFERENCES_PATH = WS_ROOT / "ws-preferences.json"
-ROUTE_CONFIGS_DIR = HOME / ".hubspot" / "route-configs"
 SERVE_LOG_NAME = ".serve.log"
 PORTAL_ID = "103830646"
 DEFAULT_ORG = "HubSpot"
@@ -51,16 +50,6 @@ EXCLUDE_SUBDIR_SUBSTRS = (
 
 _THIS_DIR = pathlib.Path(__file__).resolve().parent  # .../skills/ws/scripts
 WS_SKILL_ROOT = _THIS_DIR.parent  # .../skills/ws
-
-BEND_MCP_TOOLS = [
-    "mcp__devex-mcp-server__bend_compile",
-    "mcp__devex-mcp-server__bend_file_ts_go_to_definition",
-    "mcp__devex-mcp-server__bend_list_packages",
-    "mcp__devex-mcp-server__bend_package_get_problems",
-    "mcp__devex-mcp-server__bend_package_get_tests_logs",
-    "mcp__devex-mcp-server__bend_package_get_tests_results",
-    "mcp__devex-mcp-server__bend_package_ts_get_errors",
-]
 
 
 # ---------------------------------------------------------------- Logging / output
@@ -640,15 +629,9 @@ def _provision_workspace_claude_dir(wsdir):
                     "Bash(kill:*)",
                     "Bash(pkill:*)",
                     "Bash(killall:*)",
+                    "Bash(bend dev:*)",
                     "Bash(bend reactor serve:*)",
                     "Bash(bend serve:*)",
-                ],
-                "allow": [
-                    *BEND_MCP_TOOLS,
-                    "Bash(ws.py status:*)",
-                    "Bash(ws.py logs:*)",
-                    "Bash(ws.py wait-ready:*)",
-                    "Bash(ws.py urls:*)",
                 ],
             }
         }
@@ -659,16 +642,25 @@ def _provision_workspace_claude_dir(wsdir):
 
     claude_md = claude_dir / "CLAUDE.md"
     if not claude_md.exists():
-        tool_list = ",".join(t.rsplit("__", 1)[-1] for t in BEND_MCP_TOOLS)
         claude_md.write_text(
             "# Workspace Claude bootstrap\n\n"
-            "## First action: warm bend MCP tools\n"
-            "Call ToolSearch with `select:" + tool_list + "` at the start of the\n"
-            "session so the bend tool schemas are loaded up front instead of\n"
-            "dehoisted lazily on first use.\n\n"
-            "## Serve ownership\n"
-            "The workspace's `bend reactor serve` is supervised by ws.py. Do not\n"
-            "start or stop it directly — use `ws.py status/logs/wait-ready/urls`.\n"
+            "## Dev server ownership\n"
+            "The workspace's `bend dev` process is supervised by ws.py. Do not\n"
+            "start or stop it directly. All workspace commands use the `ws` CLI:\n\n"
+            "  ws status <name>          — dev server state + compiled packages\n"
+            "  ws wait-ready <name>      — block until all packages compiled\n"
+            "  ws logs <name>            — read dev server log\n"
+            "  ws urls <name>            — app + test URLs\n"
+            "  ws restart <name>         — stop + restart dev server\n\n"
+            "The `ws` command is a fish function: "
+            "`uv run ~/src/dotfiles/.claude/skills/ws/scripts/ws.py`\n\n"
+            "## Validating code\n"
+            "Use one-shot CLI commands — do not rely on the running dev server:\n"
+            "  bend check <package>                          — TypeScript, lint, format\n"
+            "  bend test <package>                           — run Jasmine tests once\n"
+            "  bend test --test-filter 'description' <pkg>  — targeted test\n\n"
+            "Tests take 2–5 min and TS checks up to 120s — do not restart the dev\n"
+            "server because validation is slow.\n"
         )
 
 
@@ -733,6 +725,21 @@ def bend_yarn(repo_clone):
             "hint": "re-run `ws.py setup <name>` to retry",
         }
     return {"repo": repo_clone.name, "ok": True}
+
+
+def bend_generate_code(pkg_paths, cwd=None):
+    log(f"bend generate-code --update ({len(pkg_paths)} packages)")
+    result = subprocess.run(
+        ["bend", "generate-code", *[str(p) for p in pkg_paths], "--update"],
+        cwd=str(cwd) if cwd else None,
+        capture_output=True, text=True, timeout=600,
+    )
+    if result.returncode != 0:
+        return {
+            "ok": False,
+            "error": f"bend generate-code failed: {result.stderr.strip()[:500]}",
+        }
+    return {"ok": True}
 
 
 def has_claude_md(repo_clone):
